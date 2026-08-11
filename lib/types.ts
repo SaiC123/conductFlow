@@ -1,5 +1,5 @@
 export type Confidence = "high" | "medium" | "low";
-export type CommitmentStatus = "proposed" | "approved" | "tasked" | "done" | "overdue";
+export type CommitmentStatus = "proposed" | "approved" | "tasked" | "done";
 export type Role = "owner" | "member";
 
 export interface Org {

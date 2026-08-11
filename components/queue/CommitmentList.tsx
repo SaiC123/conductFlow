@@ -3,7 +3,9 @@ import type { Commitment } from "@/lib/types";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Chip } from "@/components/ui/Chip";
 
-function overdue(c: Commitment) { return c.deadline ? new Date(c.deadline) < new Date() : false; }
+function overdue(c: Commitment) {
+  return c.deadline ? new Date(c.deadline) < new Date() && c.status !== "done" : false;
+}
 
 export function CommitmentList({ items }: { items: Commitment[] }) {
   if (items.length === 0) return (

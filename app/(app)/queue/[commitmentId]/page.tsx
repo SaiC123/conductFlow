@@ -13,6 +13,6 @@ export default async function DraftReview({ params }: { params: Promise<{ commit
     <div className="mono" style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
       owner: {c.owner ?? "unassigned"} · due: {c.deadline?.slice(0,10) ?? "—"} · confidence: {c.confidence}</div>
     <DraftSurface draft={draft} provenance={["transcript", "client record"]} />
-    <ApprovalBar commitmentId={c.id} orgId={c.org_id} />
+    <ApprovalBar commitmentId={c.id} />
   </main>);
 }

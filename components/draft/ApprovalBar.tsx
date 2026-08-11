@@ -3,16 +3,16 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { approveAndCreateTask, rejectCommitment } from "@/app/actions/approvals";
 
-export function ApprovalBar({ commitmentId, orgId }: { commitmentId: string; orgId: string }) {
+export function ApprovalBar({ commitmentId }: { commitmentId: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function run(action: (id: string, org: string) => Promise<void>) {
+  function run(action: (id: string) => Promise<void>) {
     setError(null);
     startTransition(async () => {
       try {
-        await action(commitmentId, orgId);
+        await action(commitmentId);
         router.push("/queue");
         router.refresh();
       } catch (e) {
@@ -27,7 +27,7 @@ export function ApprovalBar({ commitmentId, orgId }: { commitmentId: string; org
         <button
           disabled={isPending}
           onClick={() => run(approveAndCreateTask)}
-          style={{ background: "#6366F1", color: "#fff", padding: "9px 16px",
+          style={{ background: "var(--accent)", color: "#fff", padding: "9px 16px",
             borderRadius: 8, border: 0, fontWeight: 600,
             opacity: isPending ? 0.6 : 1, cursor: isPending ? "not-allowed" : "pointer" }}>
           Approve & create task

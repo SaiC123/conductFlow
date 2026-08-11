@@ -3,6 +3,7 @@
 :root {
   --canvas: #0A0A0B; --surface: #131316; --border: rgba(255,255,255,.08);
   --text: #EDEDEF; --muted: #9A9AA5; --accent: #6366F1;
+  --danger: #E5484D; --ok: #3FB68B; --warn: #E0A23C;
 }
 html, body { background: var(--canvas); color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
