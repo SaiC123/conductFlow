@@ -29,4 +29,28 @@ describe("RLS org isolation", () => {
     const { data } = await b.from("commitment").select("id").eq("org_id", orgA);
     expect(data).toEqual([]);
   });
+
+  it("anonymous callers are denied outright", async () => {
+    const anon = createClient(URL, ANON);
+    const { data, error } = await anon.from("commitment").select("id");
+    expect(data).toBeNull();
+    expect(error?.code).toBe("42501");
+  });
+});
+
+describe("audit_event is append-only", () => {
+  it("an org member can insert and read audit rows", async () => {
+    const a = client(await jwt(userA));
+    const { error } = await a.from("audit_event").insert({
+      org_id: orgA, actor: "human", action: "read", target: "test:append-only" });
+    expect(error).toBeNull();
+  });
+
+  it("no role may delete or update audit rows", async () => {
+    const a = client(await jwt(userA));
+    const del = await a.from("audit_event").delete().eq("org_id", orgA);
+    expect(del.error).not.toBeNull();
+    const upd = await a.from("audit_event").update({ target: "tampered" }).eq("org_id", orgA);
+    expect(upd.error).not.toBeNull();
+  });
 });

@@ -1,8 +1,17 @@
-import { listCommitments } from "@/lib/db/queries";
+import Link from "next/link";
+import { getCurrentOrgId, listCommitments } from "@/lib/db/queries";
 import { CommitmentList } from "@/components/queue/CommitmentList";
-const DEMO_ORG = "00000000-0000-0000-0000-00000000000a";
+
 export default async function QueuePage() {
-  const items = await listCommitments(DEMO_ORG);
+  const orgId = await getCurrentOrgId();
+  if (!orgId) return (
+    <main style={{ maxWidth: 860, margin: "0 auto", padding: "40px 24px" }}>
+      <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Commitment queue</h1>
+      <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>
+        Sign in to see your organization&apos;s commitments.</p>
+      <Link href="/onboarding" style={{ color: "var(--accent)" }}>Go to sign in →</Link>
+    </main>);
+  const items = await listCommitments(orgId);
   return (<main style={{ maxWidth: 860, margin: "0 auto", padding: "40px 24px" }}>
     <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Commitment queue</h1>
     <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>

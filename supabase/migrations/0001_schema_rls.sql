@@ -98,3 +98,22 @@ create policy sel_audit on audit_event for select
   using (org_id in (select current_user_orgs()));
 create policy ins_audit on audit_event for insert
   with check (org_id in (select current_user_orgs()));
+
+-- Table privileges. RLS filters rows; GRANT decides who may attempt at all.
+-- anon gets nothing: unauthenticated callers are denied before RLS is consulted.
+revoke all on all tables in schema public from anon, authenticated, service_role;
+grant usage on schema public to authenticated, service_role;
+
+do $$ declare t text; begin
+  foreach t in array array['client_contact','conversation','transcript','commitment',
+    'task','deliverable_draft','approval_event']
+  loop
+    execute format('grant select, insert, update on %I to authenticated;', t);
+    execute format('grant select, insert, update on %I to service_role;', t);
+  end loop;
+end $$;
+
+grant select on organization, membership to authenticated, service_role;
+-- audit_event is append-only for every role: select + insert, never update or delete.
+grant select, insert on audit_event to authenticated, service_role;
+grant execute on function current_user_orgs() to authenticated;

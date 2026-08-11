@@ -1,6 +1,16 @@
 import { getServerClient } from "./server";
 import type { Commitment, DeliverableDraft } from "@/lib/types";
 
+/** Org for the signed-in user, resolved from membership. Null when signed out. */
+export async function getCurrentOrgId(): Promise<string | null> {
+  const s = await getServerClient();
+  const { data: auth } = await s.auth.getUser();
+  if (!auth.user) return null;
+  const { data } = await s.from("membership").select("org_id")
+    .eq("user_id", auth.user.id).limit(1).maybeSingle();
+  return (data?.org_id as string | undefined) ?? null;
+}
+
 export async function listCommitments(orgId: string): Promise<Commitment[]> {
   const s = await getServerClient();
   const { data } = await s.from("commitment").select("*").eq("org_id", orgId)

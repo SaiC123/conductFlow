@@ -1,9 +1,18 @@
-import { listCommitments } from "@/lib/db/queries";
+import Link from "next/link";
+import { getCurrentOrgId, listCommitments } from "@/lib/db/queries";
 import { computeMetrics } from "@/lib/metrics";
 import { StatTile } from "@/components/ui/StatTile";
-const DEMO_ORG = "00000000-0000-0000-0000-00000000000a";
+
 export default async function Dashboard() {
-  const m = computeMetrics(await listCommitments(DEMO_ORG));
+  const orgId = await getCurrentOrgId();
+  if (!orgId) return (
+    <main style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px" }}>
+      <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Promise risk</h1>
+      <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>
+        Sign in to see your organization&apos;s promise risk.</p>
+      <Link href="/onboarding" style={{ color: "var(--accent)" }}>Go to sign in →</Link>
+    </main>);
+  const m = computeMetrics(await listCommitments(orgId));
   return (<main style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px" }}>
     <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Promise risk</h1>
     <div style={{ display: "flex", gap: 16, marginTop: 24, flexWrap: "wrap" }}>
