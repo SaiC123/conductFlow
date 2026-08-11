@@ -45,7 +45,7 @@ function parseVtt(text: string): string {
     .filter((block) => block.length > 0)
     .map((block) =>
       block
-        .replace(/<v\s+([^>]+)>/, "$1: ")
+        .replace(/<v\s+([^>]+)>/g, "$1: ")
         .replace(/<[^>]+>/g, "")
         .replace(/\s+/g, " ")
         .trim(),

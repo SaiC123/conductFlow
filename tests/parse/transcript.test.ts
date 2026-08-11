@@ -65,4 +65,19 @@ by Friday.</v>
     expect(out).toContain("Tutor: I'll send Mia the revised set by Friday.");
     expect(out).toContain("Parent: That works, thank you.");
   });
+
+  it("preserves all speaker labels when cues lack blank line separator", () => {
+    const MALFORMED_VTT = `WEBVTT
+
+1
+00:00:01.000 --> 00:00:04.000
+<v Tutor>I'll send the revised set.
+2
+00:00:04.500 --> 00:00:07.000
+<v Parent>That works, thank you.</v>
+`;
+    const out = parseTranscriptFile("call.vtt", MALFORMED_VTT);
+    expect(out).toContain("Tutor:");
+    expect(out).toContain("Parent:");
+  });
 });
