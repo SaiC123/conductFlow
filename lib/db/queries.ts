@@ -1,5 +1,5 @@
 import { getServerClient } from "./server";
-import type { Commitment, DeliverableDraft, Transcript } from "@/lib/types";
+import type { Commitment, DeliverableDraft, Transcript, TaskStatus } from "@/lib/types";
 
 /** Org for the signed-in user, resolved from membership. Null when signed out. */
 export async function getCurrentOrgId(): Promise<string | null> {
@@ -48,6 +48,51 @@ export async function getTranscriptForCommitment(commitmentId: string): Promise<
   const { data } = await s.from("transcript").select("*")
     .eq("conversation_id", c.conversation_id).limit(1).maybeSingle();
   return (data ?? null) as Transcript | null;
+}
+
+export interface BoardTask {
+  id: string; commitment_id: string; title: string;
+  owner: string | null; due: string | null; status: TaskStatus;
+  completed_at: string | null; client_name: string;
+}
+
+/** Board rows: the task plus the client it was promised to and the commitment it came from. */
+export async function listBoardTasks(orgId: string): Promise<BoardTask[]> {
+  const s = await getServerClient();
+  const { data } = await s.from("task")
+    .select("id,commitment_id,title,owner,due,status,completed_at,commitment(client_contact(name))")
+    .eq("org_id", orgId)
+    .order("due", { ascending: true, nullsFirst: false });
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    commitment_id: r.commitment_id as string,
+    title: r.title as string,
+    owner: (r.owner as string | null) ?? null,
+    due: (r.due as string | null) ?? null,
+    status: r.status as TaskStatus,
+    completed_at: (r.completed_at as string | null) ?? null,
+    client_name:
+      (r.commitment as { client_contact?: { name?: string } | null } | null)
+        ?.client_contact?.name ?? "Unassigned client",
+  }));
+}
+
+export interface OpenReminder {
+  id: string; task_id: string; due_at: string; title: string;
+}
+
+export async function listOpenReminders(orgId: string): Promise<OpenReminder[]> {
+  const s = await getServerClient();
+  const { data } = await s.from("reminder")
+    .select("id,task_id,due_at,task(title)")
+    .eq("org_id", orgId).eq("state", "open")
+    .order("due_at", { ascending: true });
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    task_id: r.task_id as string,
+    due_at: r.due_at as string,
+    title: (r.task as { title?: string } | null)?.title ?? "Untitled task",
+  }));
 }
 
 export interface FailedTranscript {

@@ -16,7 +16,10 @@ export default async function QueuePage() {
   return (<main style={{ maxWidth: 860, margin: "0 auto", padding: "40px 24px" }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
       <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Commitment queue</h1>
-      <Link href="/ingest" style={{ color: "var(--accent)", fontSize: 14 }}>Add a transcript →</Link>
+      <span style={{ display: "flex", gap: 16 }}>
+        <Link href="/tasks" style={{ color: "var(--accent)", fontSize: 14 }}>Task board →</Link>
+        <Link href="/ingest" style={{ color: "var(--accent)", fontSize: 14 }}>Add a transcript →</Link>
+      </span>
     </div>
     <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>
       Review AI-extracted promises. Nothing is sent — you approve every action.</p>

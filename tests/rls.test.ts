@@ -43,6 +43,24 @@ describe("RLS org isolation", () => {
     expect(data).toEqual([]);
   });
 
+  it("user in org B cannot read org A reminders", async () => {
+    const b = client(await jwt(userB));
+    const { data } = await b.from("reminder").select("id").eq("org_id", orgA);
+    expect(data).toEqual([]);
+  });
+
+  it("user in org B cannot read org A tasks", async () => {
+    const b = client(await jwt(userB));
+    const { data } = await b.from("task").select("id").eq("org_id", orgA);
+    expect(data).toEqual([]);
+  });
+
+  it("no role may delete a task — the record of a promise is not erasable", async () => {
+    const a = client(await jwt(userA));
+    const { error } = await a.from("task").delete().eq("org_id", orgA);
+    expect(error).not.toBeNull();
+  });
+
   it("org A owner sees the phase 2 columns with their defaults", async () => {
     const a = client(await jwt(userA));
     const { data } = await a.from("transcript")

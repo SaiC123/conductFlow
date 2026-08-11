@@ -1,4 +1,4 @@
-# ConductFlow (Phase 2)
+# ConductFlow (Phase 2 + 3B)
 
 ConductFlow turns conversations from small client-service businesses into approved
 tasks and follow-up drafts — nothing sends without you.
@@ -14,6 +14,11 @@ source span is verified verbatim against the transcript; an unverifiable span dr
 commitment to `low` confidence. Ingested text passes through injection sanitising and is
 wrapped as data, never instructions — matches are flagged on the transcript and surfaced
 in the queue and review screen.
+
+Phase 3B closes the loop: approved commitments become cards on a task board with a real
+lifecycle and a completion record, and a promise that passes its date raises an in-app
+reminder. Phase 3's Google work (OAuth login, Gmail drafts, Drive templates, Calendar
+context) is not built — it needs credentials this repo does not have.
 
 ## Prerequisites
 
@@ -47,10 +52,21 @@ in the queue and review screen.
 | `/ingest` | Paste or upload a transcript; extraction produces reviewable commitments |
 | `/queue` | Commitment queue — confidence chip + status dot per promise, needs-attention strip |
 | `/queue/[commitmentId]` | Draft review: draft surface, provenance, flagged-source banner, approval bar |
+| `/tasks` | Task board: open / in progress / delivered, plus the overdue reminder strip |
 | `/dashboard` | Promise risk: overdue, owner+deadline coverage, approved share |
 
 Approving writes an `approval_event`, a `task`, and an `audit_event`, and flips the
 commitment to `tasked`. Discarding writes a `rejected` approval event plus its audit row.
+
+Marking a task delivered stamps who completed it and when, flips its commitment to `done`,
+and resolves the open reminder. Reopening returns the commitment to `tasked`. Nothing here
+notifies anyone outside the app — a reminder is an in-app nudge, never an email.
+
+The overdue sweep raises at most one open reminder per task, so running it repeatedly is
+safe. It runs daily from `/api/cron/reminders` (declared in `vercel.json`), and on demand
+from **Check for overdue** on the board. The cron route refuses every request unless
+`Authorization: Bearer $CRON_SECRET` matches, and refuses all of them when `CRON_SECRET` is
+unset — set it in Vercel's project env before relying on the schedule.
 
 Uploads accept `.txt`, `.md`, and `.vtt` up to 250,000 characters; VTT keeps speaker
 labels because owner attribution depends on them. Files are parsed in the action and
@@ -60,12 +76,16 @@ re-runs extraction against the saved text.
 
 ## Test
 
-`npm test` — 54 tests, no API key and no network required. `tests/rls.test.ts` and
-`tests/ingest/run.test.ts` talk to the running local stack, so `supabase start` and
-`npm run db:reset` must have succeeded first. The suite covers cross-org denial,
-anonymous denial, audit append-only enforcement, the deny-by-default chokepoint,
-injection flagging, schema validation, span verification, deadline resolution, the
-extraction retry, transcript parsing, the ingest write sequence, and metrics.
+`npm test` — 81 tests, no API key and no network required. `tests/rls.test.ts`,
+`tests/ingest/run.test.ts`, `tests/reminders/sweep.test.ts`, and `tests/tasks/update.test.ts`
+talk to the running local stack, so `supabase start` and `npm run db:reset` must have
+succeeded first. The suite covers cross-org denial, anonymous denial, audit append-only
+enforcement, the deny-by-default chokepoint, injection flagging, schema validation, span
+verification, deadline resolution, the extraction retry, transcript parsing, the ingest
+write sequence, task transitions, the idempotent overdue sweep, and metrics.
+
+Those stack-backed tests write rows and never delete them — nothing in this product may
+delete a task. Run `npm run db:reset` when the local board gets noisy with fixtures.
 
 ## Eval
 
@@ -95,7 +115,7 @@ row before editing the prompt further.
 ## Deploy
 
 Vercel project + env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY`, `AI_GATEWAY_API_KEY`); Supabase hosted project with
-migrations `0001`–`0003` applied. `SUPABASE_SERVICE_ROLE_KEY` is server-only — it is
+`SUPABASE_SERVICE_ROLE_KEY`, `AI_GATEWAY_API_KEY`, `CRON_SECRET`); Supabase hosted project
+with migrations `0001`–`0004` applied (`npx supabase db push`). `SUPABASE_SERVICE_ROLE_KEY` is server-only — it is
 never imported into a client component. The hosted database has no seed data, so
 `/ingest` starts with no clients there — use **Add a new client**.

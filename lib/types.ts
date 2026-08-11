@@ -1,3 +1,7 @@
+import type { TaskStatus } from "@/lib/tasks/transitions";
+
+export type { TaskStatus };
+
 export type Confidence = "high" | "medium" | "low";
 export type CommitmentStatus = "proposed" | "approved" | "tasked" | "done";
 export type Role = "owner" | "member";
@@ -30,6 +34,20 @@ export interface ApprovalEvent {
   id: string; org_id: string; subject_type: string; subject_id: string;
   state: "proposed" | "approved" | "rejected" | "executed";
   actor_user_id: string | null; created_at: string;
+}
+
+export interface Task {
+  id: string; org_id: string; commitment_id: string;
+  title: string; owner: string | null; due: string | null;
+  status: TaskStatus; completed_at: string | null; completed_by: string | null;
+  created_at: string;
+}
+
+export type ReminderState = "open" | "dismissed" | "resolved";
+
+export interface Reminder {
+  id: string; org_id: string; task_id: string;
+  due_at: string; state: ReminderState; created_at: string;
 }
 
 export type ExtractionStatus = "pending" | "ok" | "failed";

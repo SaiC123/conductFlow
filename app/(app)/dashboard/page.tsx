@@ -14,7 +14,10 @@ export default async function Dashboard() {
     </main>);
   const m = computeMetrics(await listCommitments(orgId));
   return (<main style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px" }}>
-    <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Promise risk</h1>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+      <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Promise risk</h1>
+      <Link href="/tasks" style={{ color: "var(--accent)", fontSize: 14 }}>Task board →</Link>
+    </div>
     <div style={{ display: "flex", gap: 16, marginTop: 24, flexWrap: "wrap" }}>
       <StatTile label="Overdue promises" value={String(m.overdue)} tone="danger" />
       <StatTile label="With owner + deadline" value={`${m.withOwnerAndDeadlinePct}%`} />
