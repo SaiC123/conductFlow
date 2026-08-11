@@ -49,3 +49,20 @@ export async function getTranscriptForCommitment(commitmentId: string): Promise<
     .eq("conversation_id", c.conversation_id).limit(1).maybeSingle();
   return (data ?? null) as Transcript | null;
 }
+
+export interface FailedTranscript {
+  id: string; conversation_id: string; title: string; extraction_error: string | null;
+}
+
+export async function listFailedTranscripts(orgId: string): Promise<FailedTranscript[]> {
+  const s = await getServerClient();
+  const { data } = await s.from("transcript")
+    .select("id,conversation_id,extraction_error,conversation(title)")
+    .eq("org_id", orgId).eq("extraction_status", "failed");
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    conversation_id: r.conversation_id as string,
+    title: (r.conversation as { title?: string } | null)?.title ?? "Untitled conversation",
+    extraction_error: (r.extraction_error as string | null) ?? null,
+  }));
+}
