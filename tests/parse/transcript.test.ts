@@ -48,4 +48,21 @@ describe("parseTranscriptFile", () => {
   it("rejects an empty file", () => {
     expect(() => parseTranscriptFile("empty.txt", "   ")).toThrow(/empty/i);
   });
+
+  it("preserves speaker labels in multi-line vtt cues", () => {
+    const MULTILINE_VTT = `WEBVTT
+
+1
+00:00:01.000 --> 00:00:04.000
+<v Tutor>I'll send Mia the revised set
+by Friday.</v>
+
+2
+00:00:04.500 --> 00:00:07.000
+<v Parent>That works, thank you.</v>
+`;
+    const out = parseTranscriptFile("call.vtt", MULTILINE_VTT);
+    expect(out).toContain("Tutor: I'll send Mia the revised set by Friday.");
+    expect(out).toContain("Parent: That works, thank you.");
+  });
 });

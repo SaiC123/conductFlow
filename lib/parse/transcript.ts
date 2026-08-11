@@ -27,15 +27,28 @@ export function parseTranscriptFile(filename: string, text: string): string {
  */
 function parseVtt(text: string): string {
   return text
-    .split(/\r?\n/)
-    .filter((line) => {
-      const t = line.trim();
-      if (t === "" || t === "WEBVTT") return false;
-      if (t.includes("-->")) return false;
-      if (/^\d+$/.test(t)) return false;
-      if (/^(NOTE|STYLE|REGION)\b/.test(t)) return false;
-      return true;
-    })
-    .map((line) => line.replace(/<v\s+([^>]+)>(.*?)<\/v>/g, "$1: $2").replace(/<[^>]+>/g, "").trim())
+    .split(/\r?\n\s*\r?\n/)
+    .map((block) =>
+      block
+        .split(/\r?\n/)
+        .filter((line) => {
+          const t = line.trim();
+          if (t === "" || t === "WEBVTT") return false;
+          if (t.includes("-->")) return false;
+          if (/^\d+$/.test(t)) return false;
+          if (/^(NOTE|STYLE|REGION)\b/.test(t)) return false;
+          return true;
+        })
+        .join(" ")
+        .trim(),
+    )
+    .filter((block) => block.length > 0)
+    .map((block) =>
+      block
+        .replace(/<v\s+([^>]+)>/, "$1: ")
+        .replace(/<[^>]+>/g, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
     .join("\n");
 }
