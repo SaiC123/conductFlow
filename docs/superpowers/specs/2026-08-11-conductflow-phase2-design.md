@@ -28,7 +28,7 @@ Map and Blueprint editor (Phase 4). External send — never in MVP.
 | Decision | Choice | Why |
 | --- | --- | --- |
 | Intake | Paste **and** file upload | Both requested. Upload is a parser, not infrastructure — see §5. Implementation sequences paste first so the extraction path is proven before parsing is added. |
-| Provider | AI SDK `generateText` + `Output.object` via Vercel AI Gateway | Schema-enforced output; model swappable by string; one key; native to the Vercel deploy. (`generateObject` is deprecated in AI SDK v6.) |
+| Provider | AI SDK v7 `generateText` + `Output.object` via Vercel AI Gateway | Schema-enforced output; model swappable by string; one key; native to the Vercel deploy. (`generateObject` is deprecated; `MockLanguageModelV4` ships in v7 only.) |
 | Execution | Synchronous Server Action | Bounded 5–20s wait. No job table, no polling, no second failure mode. Moves into a worker unchanged when Phase 3 ingests on a schedule. |
 | Output landing | `commitment` rows with `status='proposed'` | `proposed` already means "nothing acted on". Reuses the whole existing review flow; no second review surface. |
 | Injection policy | Extract, flag, warn in UI | Text is wrapped as data and the prompt forbids obeying it. Blocking on crude regexes would silently reject legitimate meetings. |

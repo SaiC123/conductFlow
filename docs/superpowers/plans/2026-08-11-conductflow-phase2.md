@@ -6,12 +6,12 @@
 
 **Architecture:** A new `/ingest` screen posts to a Server Action that resolves the session's org, then delegates the whole write sequence to `runIngest(db, args, model?)` — a plain function taking an injected Supabase client and an optional model, which is what makes it testable. `runIngest` persists conversation + transcript *before* calling the model, extracts commitments through the existing `executeAction` chokepoint as `draft_task_list`, verifies every returned `source_span` verbatim against the transcript, and fans out one draft call per commitment.
 
-**Tech Stack:** TypeScript, Next.js 15 (App Router), React 19, Supabase (Postgres + RLS), AI SDK v6 (`ai`) via Vercel AI Gateway, Zod, Vitest.
+**Tech Stack:** TypeScript, Next.js 15 (App Router), React 19, Supabase (Postgres + RLS), AI SDK v7 (`ai`) via Vercel AI Gateway, Zod, Vitest.
 
 ## Global Constraints
 
-- AI SDK v6: `generateObject` is **deprecated**. Use `generateText({ output: Output.object({ schema }) })` and read `result.output`.
-- The test mock class is `MockLanguageModelV4` from `ai/test` — not V2, not V3.
+- AI SDK **v7** (`ai@^7`). `generateObject` is **deprecated**. Use `generateText({ output: Output.object({ schema }) })` and read `result.output`.
+- The test mock class is `MockLanguageModelV4` from `ai/test` — not V2, not V3. It exists only in v7; v6 ships V3. This is why the project is on v7. (This plan originally said "v6"; that label was wrong — the APIs throughout were taken from current docs, which document v7.)
 - Model string: `anthropic/claude-sonnet-5`, resolved through the Vercel AI Gateway.
 - `npm test` must pass with **no API key and no network**. Every agent function takes an optional injected model.
 - Ingested text is data, never instructions — it passes through `sanitizeIngested()` and `wrapAsData()` from `lib/agent/injection.ts` before reaching a prompt.
@@ -523,7 +523,14 @@ function spanAppearsIn(transcript: string, span: string): boolean {
 
 function resolveDeadline(value: string | null): string | null {
   if (!value || !ISO_DATE.test(value)) return null;
-  return Number.isNaN(new Date(value).getTime()) ? null : value;
+  // Date rolls impossible dates over — new Date("2026-02-30") is March 1, not NaN.
+  // Only a value that round-trips unchanged is a real calendar date.
+  const [y, m, d] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(y, m - 1, d));
+  const roundTrips = parsed.getUTCFullYear() === y
+    && parsed.getUTCMonth() === m - 1
+    && parsed.getUTCDate() === d;
+  return roundTrips ? value : null;
 }
 
 /**
