@@ -3,7 +3,7 @@ import { computeMetrics } from "@/lib/metrics";
 import type { Commitment } from "@/lib/types";
 const base: Commitment = { id:"x", org_id:"o", conversation_id:"c", client_id:"cl",
   text:"t", owner:null, deadline:null, type:"email", confidence:"low",
-  source_span:"", status:"proposed", created_at:"" };
+  source_span:"", status:"proposed", created_at:"", source_flagged:false };
 describe("computeMetrics", () => {
   it("counts owner+deadline coverage and overdue", () => {
     const now = new Date();
