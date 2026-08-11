@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:reset": "supabase db reset",
-    "eval": "node --experimental-strip-types --env-file=.env.local evals/run.ts"
+    "eval": "vitest run --config vitest.eval.config.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
