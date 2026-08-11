@@ -1,15 +1,51 @@
 "use client";
-import { approveCommitment, rejectCommitment, createTaskFromCommitment } from "@/app/actions/approvals";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { approveAndCreateTask, rejectCommitment } from "@/app/actions/approvals";
+
 export function ApprovalBar({ commitmentId, orgId }: { commitmentId: string; orgId: string }) {
-  return (<div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-    <button onClick={() => approveCommitment(commitmentId, orgId)}
-      style={{ background: "var(--accent)", color: "#fff", padding: "9px 16px",
-        borderRadius: 8, border: 0, fontWeight: 600 }}>Approve & create task</button>
-    <button onClick={() => createTaskFromCommitment(commitmentId, orgId)}
-      style={{ background: "transparent", color: "var(--text)", padding: "9px 16px",
-        borderRadius: 8, border: "1px solid var(--border)" }}>Edit</button>
-    <button onClick={() => rejectCommitment(commitmentId, orgId)}
-      style={{ background: "transparent", color: "var(--muted)", padding: "9px 16px",
-        borderRadius: 8, border: "1px solid var(--border)" }}>Discard</button>
-  </div>);
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function run(action: (id: string, org: string) => Promise<void>) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await action(commitmentId, orgId);
+        router.push("/queue");
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      }
+    });
+  }
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button
+          disabled={isPending}
+          onClick={() => run(approveAndCreateTask)}
+          style={{ background: "#6366F1", color: "#fff", padding: "9px 16px",
+            borderRadius: 8, border: 0, fontWeight: 600,
+            opacity: isPending ? 0.6 : 1, cursor: isPending ? "not-allowed" : "pointer" }}>
+          Approve & create task
+        </button>
+        <button
+          disabled={isPending}
+          onClick={() => run(rejectCommitment)}
+          style={{ background: "transparent", color: "var(--muted)", padding: "9px 16px",
+            borderRadius: 8, border: "1px solid var(--border)",
+            opacity: isPending ? 0.6 : 1, cursor: isPending ? "not-allowed" : "pointer" }}>
+          Discard
+        </button>
+      </div>
+      {error && (
+        <div className="mono" style={{ color: "var(--muted)", fontSize: 13, marginTop: 10 }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
 }
