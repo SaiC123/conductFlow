@@ -5,6 +5,7 @@ import { SignJWT } from "jose";
 const URL = process.env.SUPABASE_URL!, ANON = process.env.SUPABASE_ANON_KEY!,
   SECRET = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET!);
 const orgA = "00000000-0000-0000-0000-00000000000a";
+const userA = "00000000-0000-0000-0000-0000000000a1";
 const userB = "00000000-0000-0000-0000-0000000000b1";
 
 async function jwt(sub: string) {
@@ -16,6 +17,13 @@ function client(token: string) {
 }
 
 describe("RLS org isolation", () => {
+  it("positive control: org A owner can read org A commitments", async () => {
+    const a = client(await jwt(userA));
+    const { data } = await a.from("commitment").select("id").eq("org_id", orgA);
+    expect(data).not.toBeNull();
+    expect(data!.length).toBeGreaterThan(0);
+  });
+
   it("user in org B cannot read org A commitments", async () => {
     const b = client(await jwt(userB));
     const { data } = await b.from("commitment").select("id").eq("org_id", orgA);
