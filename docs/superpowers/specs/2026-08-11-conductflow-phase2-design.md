@@ -28,7 +28,7 @@ Map and Blueprint editor (Phase 4). External send — never in MVP.
 | Decision | Choice | Why |
 | --- | --- | --- |
 | Intake | Paste **and** file upload | Both requested. Upload is a parser, not infrastructure — see §5. Implementation sequences paste first so the extraction path is proven before parsing is added. |
-| Provider | AI SDK `generateObject` via Vercel AI Gateway | Schema-enforced output; model swappable by string; one key; native to the Vercel deploy. |
+| Provider | AI SDK `generateText` + `Output.object` via Vercel AI Gateway | Schema-enforced output; model swappable by string; one key; native to the Vercel deploy. (`generateObject` is deprecated in AI SDK v6.) |
 | Execution | Synchronous Server Action | Bounded 5–20s wait. No job table, no polling, no second failure mode. Moves into a worker unchanged when Phase 3 ingests on a schedule. |
 | Output landing | `commitment` rows with `status='proposed'` | `proposed` already means "nothing acted on". Reuses the whole existing review flow; no second review surface. |
 | Injection policy | Extract, flag, warn in UI | Text is wrapped as data and the prompt forbids obeying it. Blocking on crude regexes would silently reject legitimate meetings. |
@@ -47,8 +47,8 @@ title, date (defaults to today), and either pasted text or a chosen file.
 3. Runs `sanitizeIngested(text)`, keeping the returned flags.
 4. **Persists `conversation` + `transcript` before calling the model.** What was said survives
    even when extraction fails.
-5. Calls `extractCommitments()` — one `generateObject` call — through `executeAction` as
-   `draft_task_list`.
+5. Calls `extractCommitments()` — one `generateText` + `Output.object` call — through
+   `executeAction` as `draft_task_list`.
 6. Writes `commitment` rows as `proposed`, then fans out one draft call per commitment and writes
    `deliverable_draft` rows.
 7. Writes `audit_event` with `actor='agent'`, `action='draft'` — the first genuine agent-actor rows
@@ -104,7 +104,8 @@ table-level, so new columns are covered automatically. The RLS suite runs agains
 | `lib/agent/extract.ts` | `extractCommitments(input, model?)` → validated commitments. |
 | `lib/agent/draft.ts` | `generateFollowUpDraft(input, model?)` → subject + body. |
 | `lib/parse/transcript.ts` | `parseTranscriptFile(name, bytes)` → plain text. Pure, no I/O. |
-| `app/actions/ingest.ts` | `ingestTranscript`, `retryExtraction`. Orchestration only. |
+| `lib/ingest/run.ts` | `runIngest(db, args, model?)` — the whole write sequence against an injected Supabase client. |
+| `app/actions/ingest.ts` | `ingestTranscript`, `retryExtraction`. Resolves session + org, delegates to `runIngest`. |
 | `app/(app)/ingest/page.tsx` | The intake form. |
 
 The optional `model` parameter on both agent functions is the testing seam: production passes
@@ -153,15 +154,18 @@ how many were dropped — the transcript still reads `ok`, since partial extract
 
 ## 10. Testing
 
-**Unit (hermetic, no API key).** Both agent functions take an injected `MockLanguageModelV2`.
+**Unit (hermetic, no API key).** Both agent functions take an injected `MockLanguageModelV4`.
 Assertions cover what is deterministic: the prompt contains the data delimiters; flagged text is
 recorded; an invented `source_span` is downgraded; relative dates resolve against the conversation
 date; zero commitments is a success path; `.vtt` timestamps are stripped; the size cap rejects.
 
-**Integration (local Supabase, as `rls.test.ts` already does).** A full ingest writes conversation,
-transcript, commitments, drafts, and an `audit_event` with `actor='agent'`. A failed extraction
-leaves `extraction_status='failed'`. Retry clears it. The RLS suite extends to transcripts so the
-new columns get the same cross-org denial proof.
+**Integration (local Supabase, as `rls.test.ts` already does).** The write sequence lives in
+`runIngest(db, args, model?)` rather than inside the Server Action, because a Server Action calls
+`cookies()` and cannot run outside a Next request scope. Tests call `runIngest` directly with a
+service-role client and a mock model; the Server Action stays a thin session-resolving wrapper.
+A full ingest writes conversation, transcript, commitments, drafts, and an `audit_event` with
+`actor='agent'`. A failed extraction leaves `extraction_status='failed'`. Retry clears it. The RLS
+suite extends to transcripts so the new columns get the same cross-org denial proof.
 
 **Eval (manual, real model, costs money, never in CI).** `npm run eval` scores five labelled
 transcripts — one per sampler vertical (tutoring, consulting, coaching, agency) plus one
