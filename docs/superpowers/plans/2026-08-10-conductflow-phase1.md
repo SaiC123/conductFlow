@@ -1,8 +1,8 @@
-# ConductFlow Phase 1 Implementation Plan
+﻿# ConductFlow Phase 1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship a deployable Next.js + Supabase skeleton where a mock static transcript flows through commitment extraction → task list → draft review → promise-risk dashboard, with org isolation, an approval-gated action chokepoint, and an append-only audit log.
+**Goal:** Ship a deployable Next.js + Supabase skeleton where a mock static transcript flows through commitment extraction â†’ task list â†’ draft review â†’ promise-risk dashboard, with org isolation, an approval-gated action chokepoint, and an append-only audit log.
 
 **Architecture:** Next.js App Router (RSC for reads, Server Actions for all writes). Supabase Postgres with RLS keyed on org membership. A single `executeAction()` server chokepoint enforces a typed `AgentContract` (deny-by-default) and writes `approval_event` + `audit_event`. Phase 1 extraction is a schema-stable fixture that Phase 2 replaces with a real LLM call.
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Positioning copy is horizontal — "small client-service businesses"; never vertical-locked.
+- Positioning copy is horizontal â€” "small client-service businesses"; never vertical-locked.
 - Stack is Next.js full-stack (App Router + Server Actions), TypeScript. No separate backend.
 - Database/auth/storage is Supabase; hosting is Vercel + Supabase.
 - Theme: dark "ops command center". Canvas `#0A0A0B`, surface `#131316`, hairline border `rgba(255,255,255,0.08)`, accent electric indigo `#6366F1`.
@@ -21,7 +21,7 @@
 - Service-role key is server-only; never imported into a client component.
 - Every table carries `org_id`; RLS enforced from migration `0001`.
 - `audit_event` is insert-only (no update/delete policy).
-- Ingested text is data, never instructions — passes through `lib/agent/injection.ts`.
+- Ingested text is data, never instructions â€” passes through `lib/agent/injection.ts`.
 - Commit after every task. Conventional-commit messages.
 
 ---
@@ -72,7 +72,7 @@ conductflow/
 **Interfaces:**
 - Produces: `design/tokens.ts` exports `tokens` (`{ color: {...}, radius, space }`) consumed by components.
 
-- [ ] **Step 1: Scaffold Next.js app**
+- [x] **Step 1: Scaffold Next.js app**
 
 Run in `C:\Users\saisi\Desktop\conductflow`:
 ```bash
@@ -82,7 +82,7 @@ npm i -D vitest @vitejs/plugin-react
 ```
 Expected: app builds; `npm run dev` serves on `http://localhost:3000`.
 
-- [ ] **Step 2: Write theme tokens**
+- [x] **Step 2: Write theme tokens**
 
 `design/tokens.ts`:
 ```ts
@@ -104,7 +104,7 @@ export const tokens = {
 export type Tokens = typeof tokens;
 ```
 
-- [ ] **Step 3: Theme the root layout + globals**
+- [x] **Step 3: Theme the root layout + globals**
 
 `app/globals.css` (append after Tailwind import):
 ```css
@@ -126,7 +126,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-- [ ] **Step 4: Marketing hero (empty state pattern)**
+- [x] **Step 4: Marketing hero (empty state pattern)**
 
 `app/(marketing)/page.tsx`:
 ```tsx
@@ -138,7 +138,7 @@ export default function Home() {
       </h1>
       <p style={{ color: "var(--muted)", marginTop: 16, fontSize: 18 }}>
         ConductFlow turns conversations from small client-service businesses into
-        approved tasks and follow-up drafts — nothing sends without you.
+        approved tasks and follow-up drafts â€” nothing sends without you.
       </p>
       <a href="/onboarding" style={{ display: "inline-block", marginTop: 32,
         background: "var(--accent)", color: "#fff", padding: "10px 18px",
@@ -148,7 +148,7 @@ export default function Home() {
 }
 ```
 
-- [ ] **Step 5: Verify + commit**
+- [x] **Step 5: Verify + commit**
 
 Run: `npm run build`
 Expected: build succeeds.
@@ -166,7 +166,7 @@ git add -A && git commit -m "feat: scaffold Next.js app with dark ops theme toke
 **Interfaces:**
 - Produces: `lib/types.ts` exports `Org, Membership, Commitment, Confidence, CommitmentStatus, DeliverableDraft, ApprovalEvent`. `lib/db/server.ts` exports `getServerClient()`. `lib/db/service.ts` exports `getServiceClient()`.
 
-- [ ] **Step 1: Define shared types**
+- [x] **Step 1: Define shared types**
 
 `lib/types.ts`:
 ```ts
@@ -191,7 +191,7 @@ export interface ApprovalEvent {
 }
 ```
 
-- [ ] **Step 2: Env example**
+- [x] **Step 2: Env example**
 
 `.env.local.example`:
 ```
@@ -200,7 +200,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-- [ ] **Step 3: Server + service clients**
+- [x] **Step 3: Server + service clients**
 
 `lib/db/server.ts`:
 ```ts
@@ -230,7 +230,7 @@ export function getServiceClient() {
 }
 ```
 
-- [ ] **Step 4: Verify + commit**
+- [x] **Step 4: Verify + commit**
 
 Run: `npx tsc --noEmit`
 Expected: no type errors.
@@ -248,7 +248,7 @@ git add -A && git commit -m "feat: shared row types and supabase server/service 
 **Interfaces:**
 - Produces: tables `organization, app_user, membership, client_contact, conversation, transcript, commitment, task, deliverable_draft, approval_event, audit_event`; SQL helper `current_user_orgs()`.
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 `supabase/migrations/0001_schema_rls.sql`:
 ```sql
@@ -353,7 +353,7 @@ create policy ins_audit on audit_event for insert
   with check (org_id in (select current_user_orgs()));
 ```
 
-- [ ] **Step 2: Configure Vitest**
+- [x] **Step 2: Configure Vitest**
 
 `vitest.config.ts`:
 ```ts
@@ -361,7 +361,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({ test: { environment: "node", include: ["tests/**/*.test.ts"] } });
 ```
 
-- [ ] **Step 3: Write the failing cross-org denial test**
+- [x] **Step 3: Write the failing cross-org denial test**
 
 `tests/rls.test.ts` (runs against local Supabase, using two JWTs signed with the local JWT secret from `supabase status`):
 ```ts
@@ -392,12 +392,12 @@ describe("RLS org isolation", () => {
 ```
 Install: `npm i -D jose`.
 
-- [ ] **Step 4: Run test to verify it fails**
+- [x] **Step 4: Run test to verify it fails**
 
 Run: `supabase start && supabase db reset && npx vitest run tests/rls.test.ts`
-Expected: FAIL — seed (Task 4) not yet applied / users absent.
+Expected: FAIL â€” seed (Task 4) not yet applied / users absent.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: schema + RLS migration and cross-org denial test"
@@ -411,11 +411,11 @@ git add -A && git commit -m "feat: schema + RLS migration and cross-org denial t
 - Create: `supabase/seed.sql`
 
 **Interfaces:**
-- Produces: demo org `…000a` (owner `…00a1`, member `…00a2`), 4 clients, 4 conversations+transcripts (tutoring/consulting/coaching/agency), pre-extracted commitments incl. ≥1 overdue and varied confidence; a second org `…000b` with user `…00b1` for the isolation test.
+- Produces: demo org `â€¦000a` (owner `â€¦00a1`, member `â€¦00a2`), 4 clients, 4 conversations+transcripts (tutoring/consulting/coaching/agency), pre-extracted commitments incl. â‰¥1 overdue and varied confidence; a second org `â€¦000b` with user `â€¦00b1` for the isolation test.
 
-- [ ] **Step 1: Write seed**
+- [x] **Step 1: Write seed**
 
-`supabase/seed.sql` (excerpt — full four samples follow the same shape):
+`supabase/seed.sql` (excerpt â€” full four samples follow the same shape):
 ```sql
 insert into organization(id,name) values
  ('00000000-0000-0000-0000-00000000000a','Demo Studio'),
@@ -462,12 +462,12 @@ insert into commitment(org_id,conversation_id,client_id,text,owner,deadline,type
   'Send accountability worksheet','owner@demo.test', now()-interval '2 days','email','low','accountability worksheet today','proposed');
 ```
 
-- [ ] **Step 2: Apply + run RLS test to green**
+- [x] **Step 2: Apply + run RLS test to green**
 
 Run: `supabase db reset && SUPABASE_URL=$(supabase status -o json | jq -r .API_URL) ... npx vitest run tests/rls.test.ts`
-Expected: PASS — org B user reads zero org A commitments.
+Expected: PASS â€” org B user reads zero org A commitments.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add -A && git commit -m "feat: mixed-sampler seed data (tutoring/consulting/coaching/agency)"
@@ -483,7 +483,7 @@ git add -A && git commit -m "feat: mixed-sampler seed data (tutoring/consulting/
 **Interfaces:**
 - Produces: `sanitizeIngested(raw: string): { text: string; flagged: string[] }` and `wrapAsData(text: string): string`.
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 `tests/agent/injection.test.ts`:
 ```ts
@@ -502,12 +502,12 @@ describe("sanitizeIngested", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify fail**
+- [x] **Step 2: Run to verify fail**
 
 Run: `npx vitest run tests/agent/injection.test.ts`
-Expected: FAIL — module not found.
+Expected: FAIL â€” module not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `lib/agent/injection.ts`:
 ```ts
@@ -527,9 +527,9 @@ export function wrapAsData(text: string): string {
 }
 ```
 
-- [ ] **Step 4: Run to verify pass + commit**
+- [x] **Step 4: Run to verify pass + commit**
 
-Run: `npx vitest run tests/agent/injection.test.ts` → PASS
+Run: `npx vitest run tests/agent/injection.test.ts` â†’ PASS
 ```bash
 git add -A && git commit -m "feat: ingested-text sanitization (prompt-injection boundary)"
 ```
@@ -544,7 +544,7 @@ git add -A && git commit -m "feat: ingested-text sanitization (prompt-injection 
 **Interfaces:**
 - Produces: `AgentContract` type, `firstAgentContract`, and `mockExtract(transcript: string): ExtractedCommitment[]` where `ExtractedCommitment = Pick<Commitment,"text"|"owner"|"deadline"|"type"|"confidence"|"source_span">`.
 
-- [ ] **Step 1: Write the contract**
+- [x] **Step 1: Write the contract**
 
 `lib/agent/contract.ts`:
 ```ts
@@ -570,7 +570,7 @@ export const firstAgentContract: AgentContract = {
 };
 ```
 
-- [ ] **Step 2: Write failing extract test**
+- [x] **Step 2: Write failing extract test**
 
 `tests/agent/extract.test.ts`:
 ```ts
@@ -590,12 +590,12 @@ describe("mockExtract", () => {
 });
 ```
 
-- [ ] **Step 3: Run to verify fail**
+- [x] **Step 3: Run to verify fail**
 
 Run: `npx vitest run tests/agent/extract.test.ts`
-Expected: FAIL — module not found.
+Expected: FAIL â€” module not found.
 
-- [ ] **Step 4: Implement fixture (schema-stable; Phase 2 swaps body for LLM)**
+- [x] **Step 4: Implement fixture (schema-stable; Phase 2 swaps body for LLM)**
 
 `lib/agent/extract.mock.ts`:
 ```ts
@@ -620,9 +620,9 @@ export function mockExtract(transcript: string): ExtractedCommitment[] {
 }
 ```
 
-- [ ] **Step 5: Run to verify pass + commit**
+- [x] **Step 5: Run to verify pass + commit**
 
-Run: `npx vitest run tests/agent/extract.test.ts` → PASS
+Run: `npx vitest run tests/agent/extract.test.ts` â†’ PASS
 ```bash
 git add -A && git commit -m "feat: agent contract and schema-stable mock extraction"
 ```
@@ -638,7 +638,7 @@ git add -A && git commit -m "feat: agent contract and schema-stable mock extract
 - Consumes: `firstAgentContract` (Task 6), `getServiceClient` (Task 2).
 - Produces: `logAudit(input)`; `executeAction(req: ActionRequest): Promise<ActionResult>` where `ActionRequest = { action: string; orgId: string; actorUserId: string | null; subjectType: string; subjectId: string; approved: boolean }`.
 
-- [ ] **Step 1: Write failing chokepoint test**
+- [x] **Step 1: Write failing chokepoint test**
 
 `tests/agent/execute.test.ts`:
 ```ts
@@ -665,12 +665,12 @@ describe("canExecute (deny-by-default)", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify fail**
+- [x] **Step 2: Run to verify fail**
 
 Run: `npx vitest run tests/agent/execute.test.ts`
-Expected: FAIL — module not found.
+Expected: FAIL â€” module not found.
 
-- [ ] **Step 3: Implement audit writer**
+- [x] **Step 3: Implement audit writer**
 
 `lib/audit/log.ts`:
 ```ts
@@ -687,7 +687,7 @@ export async function logAudit(input: {
 }
 ```
 
-- [ ] **Step 4: Implement chokepoint (pure guard + effectful runner)**
+- [x] **Step 4: Implement chokepoint (pure guard + effectful runner)**
 
 `lib/agent/execute.ts`:
 ```ts
@@ -718,9 +718,9 @@ export async function executeAction(req: ActionRequest, run: () => Promise<void>
 }
 ```
 
-- [ ] **Step 5: Run to verify pass + commit**
+- [x] **Step 5: Run to verify pass + commit**
 
-Run: `npx vitest run tests/agent/execute.test.ts` → PASS (5 tests)
+Run: `npx vitest run tests/agent/execute.test.ts` â†’ PASS (5 tests)
 ```bash
 git add -A && git commit -m "feat: audit writer and deny-by-default executeAction chokepoint"
 ```
@@ -736,7 +736,7 @@ git add -A && git commit -m "feat: audit writer and deny-by-default executeActio
 - Consumes: `executeAction` (Task 7), `getServerClient` (Task 2).
 - Produces: `approveCommitment(commitmentId, orgId)`, `rejectCommitment(commitmentId, orgId)`, `createTaskFromCommitment(commitmentId, orgId)`; `lib/db/queries.ts` exports `listCommitments(orgId)`, `getCommitment(id)`, `getDraftForCommitment(id)`.
 
-- [ ] **Step 1: Typed reads**
+- [x] **Step 1: Typed reads**
 
 `lib/db/queries.ts`:
 ```ts
@@ -761,7 +761,7 @@ export async function getDraftForCommitment(id: string): Promise<DeliverableDraf
 }
 ```
 
-- [ ] **Step 2: Approval actions (writes routed through the chokepoint)**
+- [x] **Step 2: Approval actions (writes routed through the chokepoint)**
 
 `app/actions/approvals.ts`:
 ```ts
@@ -816,9 +816,9 @@ export async function createTaskFromCommitment(commitmentId: string, orgId: stri
 }
 ```
 
-- [ ] **Step 3: Verify + commit**
+- [x] **Step 3: Verify + commit**
 
-Run: `npx tsc --noEmit` → no errors.
+Run: `npx tsc --noEmit` â†’ no errors.
 ```bash
 git add -A && git commit -m "feat: approval-gated server actions and typed reads"
 ```
@@ -834,7 +834,7 @@ git add -A && git commit -m "feat: approval-gated server actions and typed reads
 - Consumes: `listCommitments` (Task 8), `tokens` (Task 1).
 - Produces: `StatusDot`, `Chip`, `CommitmentList` components.
 
-- [ ] **Step 1: Status dot + confidence chip (dot+label, never color-only)**
+- [x] **Step 1: Status dot + confidence chip (dot+label, never color-only)**
 
 `components/ui/StatusDot.tsx`:
 ```tsx
@@ -853,7 +853,7 @@ export function Chip({ children }: { children: React.ReactNode }) {
 }
 ```
 
-- [ ] **Step 2: Commitment list**
+- [x] **Step 2: Commitment list**
 
 `components/queue/CommitmentList.tsx`:
 ```tsx
@@ -887,7 +887,7 @@ export function CommitmentList({ items }: { items: Commitment[] }) {
 }
 ```
 
-- [ ] **Step 3: Queue page (org resolved from membership)**
+- [x] **Step 3: Queue page (org resolved from membership)**
 
 `app/(app)/queue/page.tsx`:
 ```tsx
@@ -899,15 +899,15 @@ export default async function QueuePage() {
   return (<main style={{ maxWidth: 860, margin: "0 auto", padding: "40px 24px" }}>
     <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Commitment queue</h1>
     <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>
-      Review AI-extracted promises. Nothing is sent — you approve every action.</p>
+      Review AI-extracted promises. Nothing is sent â€” you approve every action.</p>
     <CommitmentList items={items} />
   </main>);
 }
 ```
 
-- [ ] **Step 4: Verify + commit**
+- [x] **Step 4: Verify + commit**
 
-Run: `npm run build` → succeeds; visit `/queue` shows seeded commitments.
+Run: `npm run build` â†’ succeeds; visit `/queue` shows seeded commitments.
 ```bash
 git add -A && git commit -m "feat: commitment queue with confidence chips and status dots"
 ```
@@ -923,7 +923,7 @@ git add -A && git commit -m "feat: commitment queue with confidence chips and st
 - Consumes: `getCommitment`, `getDraftForCommitment` (Task 8); `approveCommitment`, `rejectCommitment`, `createTaskFromCommitment` (Task 8).
 - Produces: `DraftSurface`, `ApprovalBar`.
 
-- [ ] **Step 1: Draft surface (visually distinct AI artifact + provenance)**
+- [x] **Step 1: Draft surface (visually distinct AI artifact + provenance)**
 
 `components/draft/DraftSurface.tsx`:
 ```tsx
@@ -934,18 +934,18 @@ export function DraftSurface({ draft, provenance }:
     borderRadius: 10, padding: 20, marginTop: 20 }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <span style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>Drafted by ConductFlow</span>
-      <span style={{ fontSize: 12, color: "var(--muted)" }}>Never auto-sends — review required</span>
+      <span style={{ fontSize: 12, color: "var(--muted)" }}>Never auto-sends â€” review required</span>
     </div>
     {draft?.subject && <div style={{ fontWeight: 600, marginTop: 12 }}>{draft.subject}</div>}
     <p style={{ marginTop: 8, whiteSpace: "pre-wrap", color: "var(--text)" }}>
       {draft?.body ?? "No draft yet. Approve the commitment to generate one."}</p>
     <div className="mono" style={{ marginTop: 16, fontSize: 12, color: "var(--muted)" }}>
-      Read: {provenance.join(" · ")}</div>
+      Read: {provenance.join(" Â· ")}</div>
   </section>);
 }
 ```
 
-- [ ] **Step 2: Approval bar (primary action never destructive)**
+- [x] **Step 2: Approval bar (primary action never destructive)**
 
 `components/draft/ApprovalBar.tsx`:
 ```tsx
@@ -966,7 +966,7 @@ export function ApprovalBar({ commitmentId, orgId }: { commitmentId: string; org
 }
 ```
 
-- [ ] **Step 3: Draft review page**
+- [x] **Step 3: Draft review page**
 
 `app/(app)/queue/[commitmentId]/page.tsx`:
 ```tsx
@@ -981,16 +981,16 @@ export default async function DraftReview({ params }: { params: Promise<{ commit
   return (<main style={{ maxWidth: 720, margin: "0 auto", padding: "40px 24px" }}>
     <h1 style={{ fontSize: 22, letterSpacing: "-0.02em" }}>{c.text}</h1>
     <div className="mono" style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-      owner: {c.owner ?? "unassigned"} · due: {c.deadline?.slice(0,10) ?? "—"} · confidence: {c.confidence}</div>
+      owner: {c.owner ?? "unassigned"} Â· due: {c.deadline?.slice(0,10) ?? "â€”"} Â· confidence: {c.confidence}</div>
     <DraftSurface draft={draft} provenance={["transcript", "client record"]} />
     <ApprovalBar commitmentId={c.id} orgId={c.org_id} />
   </main>);
 }
 ```
 
-- [ ] **Step 4: Verify + commit**
+- [x] **Step 4: Verify + commit**
 
-Run: `npm run build` → succeeds; `/queue/<id>` renders draft surface + approval bar; approving flips status and writes `approval_event` + `audit_event`.
+Run: `npm run build` â†’ succeeds; `/queue/<id>` renders draft surface + approval bar; approving flips status and writes `approval_event` + `audit_event`.
 ```bash
 git add -A && git commit -m "feat: draft-review trust screen with approval bar and provenance"
 ```
@@ -1006,7 +1006,7 @@ git add -A && git commit -m "feat: draft-review trust screen with approval bar a
 - Consumes: `listCommitments` (Task 8).
 - Produces: `computeMetrics(commitments): { total, withOwnerAndDeadlinePct, overdue, approvedPct }`; `StatTile`.
 
-- [ ] **Step 1: Write failing metrics test**
+- [x] **Step 1: Write failing metrics test**
 
 `tests/metrics.test.ts`:
 ```ts
@@ -1032,12 +1032,12 @@ describe("computeMetrics", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify fail**
+- [x] **Step 2: Run to verify fail**
 
 Run: `npx vitest run tests/metrics.test.ts`
-Expected: FAIL — module not found.
+Expected: FAIL â€” module not found.
 
-- [ ] **Step 3: Implement metrics**
+- [x] **Step 3: Implement metrics**
 
 `lib/metrics.ts`:
 ```ts
@@ -1053,11 +1053,11 @@ export function computeMetrics(items: Commitment[]) {
 }
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
-Run: `npx vitest run tests/metrics.test.ts` → PASS
+Run: `npx vitest run tests/metrics.test.ts` â†’ PASS
 
-- [ ] **Step 5: Stat tile + dashboard**
+- [x] **Step 5: Stat tile + dashboard**
 
 `components/ui/StatTile.tsx`:
 ```tsx
@@ -1091,7 +1091,7 @@ export default async function Dashboard() {
 }
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A && git commit -m "feat: promise-risk dashboard with instrumented metrics"
@@ -1108,7 +1108,7 @@ git add -A && git commit -m "feat: promise-risk dashboard with instrumented metr
 **Interfaces:**
 - Consumes: theme + marketing patterns.
 
-- [ ] **Step 1: Onboarding (Google-only, no password fields)**
+- [x] **Step 1: Onboarding (Google-only, no password fields)**
 
 `app/(app)/onboarding/page.tsx`:
 ```tsx
@@ -1120,12 +1120,12 @@ export default function Onboarding() {
     <button style={{ marginTop: 24, background: "#fff", color: "#111", padding: "10px 16px",
       borderRadius: 8, border: 0, fontWeight: 600 }}>Continue with Google</button>
     <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 16 }}>
-      OAuth wired in Phase 3 — this is a stub.</p>
+      OAuth wired in Phase 3 â€” this is a stub.</p>
   </main>);
 }
 ```
 
-- [ ] **Step 2: README with run + deploy steps**
+- [x] **Step 2: README with run + deploy steps**
 
 `README.md`:
 ```md
@@ -1133,7 +1133,7 @@ export default function Onboarding() {
 ## Local
 1. `cp .env.local.example .env.local` and fill Supabase keys.
 2. `supabase start && supabase db reset` (applies migration + seed).
-3. `npm run dev` → http://localhost:3000
+3. `npm run dev` â†’ http://localhost:3000
 ## Test
 `npx vitest run`
 ## Deploy
@@ -1141,12 +1141,12 @@ Vercel project + env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANO
 `SUPABASE_SERVICE_ROLE_KEY`); Supabase hosted project with migration `0001` applied.
 ```
 
-- [ ] **Step 3: Full test + build gate**
+- [x] **Step 3: Full test + build gate**
 
 Run: `npx vitest run && npm run build`
 Expected: all tests pass; production build succeeds.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A && git commit -m "feat: onboarding stub, README, deploy config"
@@ -1156,8 +1156,8 @@ git add -A && git commit -m "feat: onboarding stub, README, deploy config"
 
 ## Self-Review
 
-**Spec coverage:** §5 approval model → Tasks 7–8, 10. §5 AgentContract → Task 6, enforced Task 7. §5 injection defense → Task 5. §6 data model → Task 3. §7 screens a–d → Tasks 12, 9, 10, 11. §8 tokens → Task 1, applied throughout. §9 security (OAuth-only, RLS+denial test, append-only audit, no external send, service-key server-only) → Tasks 12, 3, 7, (absence enforced), 2. §10 metrics → Task 11. §12 done-criteria 1–7 all mapped. No gaps.
+**Spec coverage:** Â§5 approval model â†’ Tasks 7â€“8, 10. Â§5 AgentContract â†’ Task 6, enforced Task 7. Â§5 injection defense â†’ Task 5. Â§6 data model â†’ Task 3. Â§7 screens aâ€“d â†’ Tasks 12, 9, 10, 11. Â§8 tokens â†’ Task 1, applied throughout. Â§9 security (OAuth-only, RLS+denial test, append-only audit, no external send, service-key server-only) â†’ Tasks 12, 3, 7, (absence enforced), 2. Â§10 metrics â†’ Task 11. Â§12 done-criteria 1â€“7 all mapped. No gaps.
 
 **Placeholder scan:** No TBD/TODO. Every code step shows real code; every test step shows real assertions and the exact run command with expected result.
 
-**Type consistency:** `Commitment`/`Confidence`/`CommitmentStatus`/`DeliverableDraft`/`ApprovalEvent` defined in Task 2, reused unchanged in Tasks 6/8/9/10/11. `canExecute`/`executeAction`/`ActionRequest` names consistent across Tasks 7–8. `computeMetrics` return shape matches its test and dashboard consumer.
+**Type consistency:** `Commitment`/`Confidence`/`CommitmentStatus`/`DeliverableDraft`/`ApprovalEvent` defined in Task 2, reused unchanged in Tasks 6/8/9/10/11. `canExecute`/`executeAction`/`ActionRequest` names consistent across Tasks 7â€“8. `computeMetrics` return shape matches its test and dashboard consumer.
