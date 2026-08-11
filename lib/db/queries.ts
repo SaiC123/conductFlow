@@ -30,3 +30,12 @@ export async function getDraftForCommitment(id: string): Promise<DeliverableDraf
     .eq("commitment_id", id).limit(1).maybeSingle();
   return (data ?? null) as DeliverableDraft | null;
 }
+
+export interface ClientContact { id: string; org_id: string; name: string; kind: string | null; }
+
+export async function listClients(orgId: string): Promise<ClientContact[]> {
+  const s = await getServerClient();
+  const { data } = await s.from("client_contact").select("id,org_id,name,kind")
+    .eq("org_id", orgId).order("name");
+  return (data ?? []) as ClientContact[];
+}
