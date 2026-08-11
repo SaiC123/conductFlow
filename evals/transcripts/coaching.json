@@ -1,0 +1,7 @@
+{
+  "name": "coaching",
+  "conversationDate": "2026-08-11",
+  "clientName": "J. Okafor",
+  "transcript": "Coach: You'll try the morning routine for two weeks. I'll send the accountability worksheet today. Client: Perfect. Coach: We're on for the same time next month.",
+  "expected": { "minCommitments": 2, "maxCommitments": 3, "withDeadline": 1, "withOwner": 2 }
+}

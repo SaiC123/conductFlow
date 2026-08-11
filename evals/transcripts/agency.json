@@ -1,0 +1,7 @@
+{
+  "name": "agency",
+  "conversationDate": "2026-08-11",
+  "clientName": "Bloom Cafe",
+  "transcript": "Lead: We'll send three ad concepts by end of week and set up the reporting dashboard. Client: Can you also look at the landing page? Lead: We can review it, but that's outside the current scope — I'll send a quote first.",
+  "expected": { "minCommitments": 3, "maxCommitments": 4, "withDeadline": 1, "withOwner": 0 }
+}

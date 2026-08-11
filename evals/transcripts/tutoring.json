@@ -1,0 +1,7 @@
+{
+  "name": "tutoring",
+  "conversationDate": "2026-08-11",
+  "clientName": "Ramirez family",
+  "transcript": "Tutor: Mia did well on linear equations today. I'll send a revised algebra practice set by Friday, and I'll email you a progress note this evening. Parent: Great, and could we move next week's session to Thursday? Tutor: Yes, I'll confirm the new time tomorrow.",
+  "expected": { "minCommitments": 3, "maxCommitments": 4, "withDeadline": 3, "withOwner": 3 }
+}

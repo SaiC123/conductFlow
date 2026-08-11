@@ -1,0 +1,7 @@
+{
+  "name": "consulting",
+  "conversationDate": "2026-08-11",
+  "clientName": "Northwind Ltd",
+  "transcript": "Consultant: We'll deliver the audit findings deck next Wednesday. I'll share the data request list tomorrow so your team can start pulling records. Client: Who's our point of contact? Consultant: Priya will run the workshop, and she'll send calendar invites by end of week.",
+  "expected": { "minCommitments": 3, "maxCommitments": 4, "withDeadline": 3, "withOwner": 2 }
+}
