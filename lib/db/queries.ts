@@ -1,5 +1,5 @@
 import { getServerClient } from "./server";
-import type { Commitment, DeliverableDraft } from "@/lib/types";
+import type { Commitment, DeliverableDraft, Transcript } from "@/lib/types";
 
 /** Org for the signed-in user, resolved from membership. Null when signed out. */
 export async function getCurrentOrgId(): Promise<string | null> {
@@ -38,4 +38,14 @@ export async function listClients(orgId: string): Promise<ClientContact[]> {
   const { data } = await s.from("client_contact").select("id,org_id,name,kind")
     .eq("org_id", orgId).order("name");
   return (data ?? []) as ClientContact[];
+}
+
+export async function getTranscriptForCommitment(commitmentId: string): Promise<Transcript | null> {
+  const s = await getServerClient();
+  const { data: c } = await s.from("commitment").select("conversation_id")
+    .eq("id", commitmentId).single();
+  if (!c) return null;
+  const { data } = await s.from("transcript").select("*")
+    .eq("conversation_id", c.conversation_id).limit(1).maybeSingle();
+  return (data ?? null) as Transcript | null;
 }

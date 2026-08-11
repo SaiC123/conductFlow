@@ -20,6 +20,13 @@ export function CommitmentList({ items }: { items: Commitment[] }) {
             <span className="mono" style={{ color: "var(--muted)", marginLeft: 8, fontSize: 12 }}>
               {c.deadline ? new Date(c.deadline).toISOString().slice(0, 10) : "no date"}</span></span>
           <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {c.source_flagged && (
+              <span title="This transcript contained instruction-like text"
+                style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999,
+                  border: "1px solid #E0A23C", color: "#E0A23C" }}>
+                ⚠ flagged source
+              </span>
+            )}
             <Chip>{c.confidence}</Chip>
             <StatusDot tone={overdue(c) ? "danger" : c.owner ? "ok" : "warn"}
               label={overdue(c) ? "overdue" : c.owner ? c.status : "needs owner"} />
