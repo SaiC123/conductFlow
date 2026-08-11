@@ -56,6 +56,26 @@ describe("extractCommitments", () => {
     expect(r.commitments[0].deadline).toBeNull();
   });
 
+  it("nulls a deadline that is not a real calendar date", async () => {
+    const model = mockReturning({ commitments: [{
+      text: "Email the parents a progress note",
+      owner: null, deadline: "2026-02-30", type: "email", confidence: "medium",
+      source_span: "email the parents a progress note",
+    }] });
+    const r = await extractCommitments({ transcript: TRANSCRIPT, ...base }, model);
+    expect(r.commitments[0].deadline).toBeNull();
+  });
+
+  it("preserves a real calendar date exactly", async () => {
+    const model = mockReturning({ commitments: [{
+      text: "Send Mia a revised algebra practice set",
+      owner: "Tutor", deadline: "2026-08-14", type: "deliverable", confidence: "high",
+      source_span: "I'll send Mia a revised algebra practice set by Friday",
+    }] });
+    const r = await extractCommitments({ transcript: TRANSCRIPT, ...base }, model);
+    expect(r.commitments[0].deadline).toBe("2026-08-14");
+  });
+
   it("treats zero commitments as success", async () => {
     const model = mockReturning({ commitments: [] });
     const r = await extractCommitments({ transcript: "Nice weather today.", ...base }, model);
