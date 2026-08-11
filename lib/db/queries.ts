@@ -1,0 +1,22 @@
+import { getServerClient } from "./server";
+import type { Commitment, DeliverableDraft } from "@/lib/types";
+
+export async function listCommitments(orgId: string): Promise<Commitment[]> {
+  const s = await getServerClient();
+  const { data } = await s.from("commitment").select("*").eq("org_id", orgId)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as Commitment[];
+}
+
+export async function getCommitment(id: string): Promise<Commitment | null> {
+  const s = await getServerClient();
+  const { data } = await s.from("commitment").select("*").eq("id", id).single();
+  return (data ?? null) as Commitment | null;
+}
+
+export async function getDraftForCommitment(id: string): Promise<DeliverableDraft | null> {
+  const s = await getServerClient();
+  const { data } = await s.from("deliverable_draft").select("*")
+    .eq("commitment_id", id).limit(1).maybeSingle();
+  return (data ?? null) as DeliverableDraft | null;
+}
