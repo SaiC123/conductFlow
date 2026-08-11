@@ -28,8 +28,9 @@ in the queue and review screen.
 1. `cp .env.local.example .env.local` and fill in the values printed by `supabase start`
    (`API_URL` → `NEXT_PUBLIC_SUPABASE_URL`, `ANON_KEY`, `SERVICE_ROLE_KEY`).
 2. Set `AI_GATEWAY_API_KEY` in `.env.local` for extraction — it resolves
-   `anthropic/claude-sonnet-5` through the Vercel AI Gateway. `npm test` does not need
-   it; tests inject a mock model.
+   `anthropic/claude-sonnet-5` through the Vercel AI Gateway. `vercel env pull` also
+   works: the `VERCEL_OIDC_TOKEN` it writes authenticates the gateway on its own, but
+   it expires every 12 hours. `npm test` does not need either; tests inject a mock model.
 3. `npx supabase start` then `npm run db:reset` (applies migrations `0001`–`0003` + seed).
 4. `npm run dev` → http://localhost:3000
 5. Open `/onboarding` and use **Continue as demo owner**. Google OAuth arrives in
@@ -69,10 +70,11 @@ extraction retry, transcript parsing, the ingest write sequence, and metrics.
 ## Eval
 
 `npm run eval` scores extraction against five labelled transcripts (tutoring,
-consulting, coaching, agency, injection) using the real model. It needs
-`AI_GATEWAY_API_KEY` and costs money — without the key every case skips, so it is safe
-in CI but scores nothing. Run it whenever you change a prompt in `lib/agent/prompts.ts`,
-and investigate a FAIL row before editing the prompt further.
+consulting, coaching, agency, injection) using the real model. It needs a gateway
+credential — `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`, read from `.env.local` — and
+costs money. Without either, every case skips, so it is safe in CI but scores nothing.
+Run it whenever you change a prompt in `lib/agent/prompts.ts`, and investigate a FAIL
+row before editing the prompt further.
 
 ## Troubleshooting
 
@@ -84,8 +86,11 @@ and investigate a FAIL row before editing the prompt further.
   is checked before RLS. Grants live at the end of `supabase/migrations/0001_schema_rls.sql`.
 - **Actions fail with "commitment not found" after `db:reset`.** The reset recreated
   `auth.users`, so the browser session is stale. Sign in again at `/onboarding`.
-- **Ingest fails with a gateway error.** Check `AI_GATEWAY_API_KEY`. The transcript is
+- **Ingest fails with a gateway error.** Check the gateway credential. The transcript is
   still saved: `/queue` shows it under **Needs attention** with a Retry button.
+- **`customer_verification_required` (HTTP 403) from the gateway.** Authentication
+  succeeded; the Vercel account has no payment method, so AI Gateway refuses every
+  request. Add a card under the team's AI settings — no code change helps.
 
 ## Deploy
 

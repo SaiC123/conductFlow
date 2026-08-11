@@ -11,7 +11,8 @@ interface Fixture {
 
 const dir = join(import.meta.dirname, "transcripts");
 const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
-const hasKey = !!process.env.AI_GATEWAY_API_KEY;
+// The gateway accepts either an API key or the OIDC token `vercel env pull` writes.
+const hasKey = !!(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN);
 const rows: Record<string, string>[] = [];
 
 describe("extraction eval", () => {
@@ -20,7 +21,7 @@ describe("extraction eval", () => {
   });
 
   if (!hasKey) {
-    it.skip("AI_GATEWAY_API_KEY is not set — this eval calls the real model and costs money", () => {});
+    it.skip("no gateway credential (AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN) — this eval calls the real model and costs money", () => {});
   }
 
   for (const file of files) {
