@@ -1,20 +1,20 @@
-# ConductFlow Phase 2 Implementation Plan
+﻿# ConductFlow Phase 2 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the Phase 1 extraction fixture with a real model call and give transcripts a way into the system, so a pasted or uploaded client conversation produces reviewable commitments and follow-up drafts in the existing queue.
 
-**Architecture:** A new `/ingest` screen posts to a Server Action that resolves the session's org, then delegates the whole write sequence to `runIngest(db, args, model?)` — a plain function taking an injected Supabase client and an optional model, which is what makes it testable. `runIngest` persists conversation + transcript *before* calling the model, extracts commitments through the existing `executeAction` chokepoint as `draft_task_list`, verifies every returned `source_span` verbatim against the transcript, and fans out one draft call per commitment.
+**Architecture:** A new `/ingest` screen posts to a Server Action that resolves the session's org, then delegates the whole write sequence to `runIngest(db, args, model?)` â€” a plain function taking an injected Supabase client and an optional model, which is what makes it testable. `runIngest` persists conversation + transcript *before* calling the model, extracts commitments through the existing `executeAction` chokepoint as `draft_task_list`, verifies every returned `source_span` verbatim against the transcript, and fans out one draft call per commitment.
 
 **Tech Stack:** TypeScript, Next.js 15 (App Router), React 19, Supabase (Postgres + RLS), AI SDK v7 (`ai`) via Vercel AI Gateway, Zod, Vitest.
 
 ## Global Constraints
 
 - AI SDK **v7** (`ai@^7`). `generateObject` is **deprecated**. Use `generateText({ output: Output.object({ schema }) })` and read `result.output`.
-- The test mock class is `MockLanguageModelV4` from `ai/test` — not V2, not V3. It exists only in v7; v6 ships V3. This is why the project is on v7. (This plan originally said "v6"; that label was wrong — the APIs throughout were taken from current docs, which document v7.)
+- The test mock class is `MockLanguageModelV4` from `ai/test` â€” not V2, not V3. It exists only in v7; v6 ships V3. This is why the project is on v7. (This plan originally said "v6"; that label was wrong â€” the APIs throughout were taken from current docs, which document v7.)
 - Model string: `anthropic/claude-sonnet-5`, resolved through the Vercel AI Gateway.
 - `npm test` must pass with **no API key and no network**. Every agent function takes an optional injected model.
-- Ingested text is data, never instructions — it passes through `sanitizeIngested()` and `wrapAsData()` from `lib/agent/injection.ts` before reaching a prompt.
+- Ingested text is data, never instructions â€” it passes through `sanitizeIngested()` and `wrapAsData()` from `lib/agent/injection.ts` before reaching a prompt.
 - No external-send capability may exist in the codebase. Drafts are DB rows only.
 - Service-role key is server-only; never imported into a client component.
 - Every table carries `org_id`; RLS enforced. `audit_event` stays append-only.
@@ -30,11 +30,11 @@
 ```
 lib/agent/schema.ts          Zod schemas + inferred types for extraction and drafts
 lib/agent/prompts.ts         System prompts (text only, no logic)
-lib/agent/extract.ts         extractCommitments() — replaces extract.mock.ts
+lib/agent/extract.ts         extractCommitments() â€” replaces extract.mock.ts
 lib/agent/draft.ts           generateFollowUpDraft()
-lib/parse/transcript.ts      parseTranscriptFile() — pure, no I/O
-lib/ingest/run.ts            runIngest() — the write sequence, injected db + model
-app/actions/ingest.ts        ingestTranscript(), retryExtraction() — session wrappers
+lib/parse/transcript.ts      parseTranscriptFile() â€” pure, no I/O
+lib/ingest/run.ts            runIngest() â€” the write sequence, injected db + model
+app/actions/ingest.ts        ingestTranscript(), retryExtraction() â€” session wrappers
 app/(app)/ingest/page.tsx    intake form (paste + file)
 components/ingest/IngestForm.tsx   client component for the form
 components/queue/NeedsAttention.tsx failed-extraction strip
@@ -56,7 +56,7 @@ Deleted: `lib/agent/extract.mock.ts`. Rewritten in place: `tests/agent/extract.t
 **Interfaces:**
 - Produces: `extractionSchema`, `draftSchema`, `ExtractedCommitment`, `GeneratedDraft`, `EXTRACTION_MODEL`, `MAX_TRANSCRIPT_CHARS`, `MAX_COMMITMENTS`.
 
-- [ ] **Step 1: Install dependencies**
+- [x] **Step 1: Install dependencies**
 
 ```bash
 npm i ai zod
@@ -64,7 +64,7 @@ npm i ai zod
 
 Expected: `ai` v6.x and `zod` v4.x appear in `dependencies`.
 
-- [ ] **Step 2: Add the gateway key to the env example**
+- [x] **Step 2: Add the gateway key to the env example**
 
 Append to `.env.local.example`:
 
@@ -72,7 +72,7 @@ Append to `.env.local.example`:
 AI_GATEWAY_API_KEY=
 ```
 
-- [ ] **Step 3: Write the failing schema test**
+- [x] **Step 3: Write the failing schema test**
 
 `tests/agent/schema.test.ts`:
 
@@ -123,12 +123,12 @@ describe("draftSchema", () => {
 });
 ```
 
-- [ ] **Step 4: Run test to verify it fails**
+- [x] **Step 4: Run test to verify it fails**
 
 Run: `npx vitest run tests/agent/schema.test.ts`
-Expected: FAIL — cannot find module `@/lib/agent/schema`.
+Expected: FAIL â€” cannot find module `@/lib/agent/schema`.
 
-- [ ] **Step 5: Implement the schemas**
+- [x] **Step 5: Implement the schemas**
 
 `lib/agent/schema.ts`:
 
@@ -163,7 +163,7 @@ export type ExtractedCommitment = z.infer<typeof commitmentSchema> & {
 export type GeneratedDraft = z.infer<typeof draftSchema>;
 ```
 
-- [ ] **Step 6: Extend the shared row types**
+- [x] **Step 6: Extend the shared row types**
 
 In `lib/types.ts`, add `source_flagged: boolean;` to the `Commitment` interface, and append:
 
@@ -177,9 +177,9 @@ export interface Transcript {
 }
 ```
 
-- [ ] **Step 7: Run test to verify it passes + commit**
+- [x] **Step 7: Run test to verify it passes + commit**
 
-Run: `npx vitest run tests/agent/schema.test.ts` → PASS (4 tests)
+Run: `npx vitest run tests/agent/schema.test.ts` â†’ PASS (4 tests)
 
 ```bash
 git add -A && git commit -m "feat: zod schemas and shared types for phase 2 extraction"
@@ -196,7 +196,7 @@ git add -A && git commit -m "feat: zod schemas and shared types for phase 2 extr
 - Consumes: `wrapAsData` from `lib/agent/injection.ts` (Phase 1).
 - Produces: `EXTRACTION_SYSTEM_PROMPT`, `DRAFT_SYSTEM_PROMPT`, `buildExtractionPrompt({ transcript, conversationDate, clientName }): string`, `buildDraftPrompt({ commitmentText, clientName, deadline, sourceSpan }): string`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/agent/prompts.test.ts`:
 
@@ -249,12 +249,12 @@ describe("buildDraftPrompt", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/agent/prompts.test.ts`
-Expected: FAIL — cannot find module `@/lib/agent/prompts`.
+Expected: FAIL â€” cannot find module `@/lib/agent/prompts`.
 
-- [ ] **Step 3: Implement the prompts**
+- [x] **Step 3: Implement the prompts**
 
 `lib/agent/prompts.ts`:
 
@@ -311,9 +311,9 @@ export function buildDraftPrompt(input: {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes + commit**
+- [x] **Step 4: Run test to verify it passes + commit**
 
-Run: `npx vitest run tests/agent/prompts.test.ts` → PASS (5 tests)
+Run: `npx vitest run tests/agent/prompts.test.ts` â†’ PASS (5 tests)
 
 ```bash
 git add -A && git commit -m "feat: extraction and draft prompts with data-not-instructions boundary"
@@ -334,7 +334,7 @@ git add -A && git commit -m "feat: extraction and draft prompts with data-not-in
   `ExtractInput = { transcript: string; conversationDate: string; clientName: string }` and
   `ExtractResult = { commitments: ExtractedCommitment[]; flagged: string[]; dropped: number }`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/agent/extract.test.ts` (replaces the Phase 1 fixture test entirely):
 
@@ -479,16 +479,16 @@ describe("extractCommitments", () => {
 });
 ```
 
-- [ ] **Step 2: Delete the Phase 1 fixture and run the test to verify it fails**
+- [x] **Step 2: Delete the Phase 1 fixture and run the test to verify it fails**
 
 ```bash
 git rm lib/agent/extract.mock.ts
 ```
 
 Run: `npx vitest run tests/agent/extract.test.ts`
-Expected: FAIL — cannot find module `@/lib/agent/extract`.
+Expected: FAIL â€” cannot find module `@/lib/agent/extract`.
 
-- [ ] **Step 3: Implement extraction**
+- [x] **Step 3: Implement extraction**
 
 `lib/agent/extract.ts`:
 
@@ -523,7 +523,7 @@ function spanAppearsIn(transcript: string, span: string): boolean {
 
 function resolveDeadline(value: string | null): string | null {
   if (!value || !ISO_DATE.test(value)) return null;
-  // Date rolls impossible dates over — new Date("2026-02-30") is March 1, not NaN.
+  // Date rolls impossible dates over â€” new Date("2026-02-30") is March 1, not NaN.
   // Only a value that round-trips unchanged is a real calendar date.
   const [y, m, d] = value.split("-").map(Number);
   const parsed = new Date(Date.UTC(y, m - 1, d));
@@ -535,7 +535,7 @@ function resolveDeadline(value: string | null): string | null {
 
 /**
  * A model that returns prose instead of JSON is usually fixed by asking again.
- * One retry only — a second failure is a real problem the caller should see.
+ * One retry only â€” a second failure is a real problem the caller should see.
  */
 async function callWithOneRetry(input: ExtractInput, model?: LanguageModel) {
   const call = async () => {
@@ -583,11 +583,11 @@ export async function extractCommitments(
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
-Run: `npx vitest run tests/agent/extract.test.ts` → PASS (9 tests)
+Run: `npx vitest run tests/agent/extract.test.ts` â†’ PASS (9 tests)
 
-- [ ] **Step 5: Verify no dangling references to the deleted fixture + commit**
+- [x] **Step 5: Verify no dangling references to the deleted fixture + commit**
 
 Run: `npx tsc --noEmit`
 Expected: no errors. If `mockExtract` is still imported anywhere, remove the import.
@@ -607,7 +607,7 @@ git add -A && git commit -m "feat: real LLM extraction with verbatim span verifi
 - Consumes: `MAX_TRANSCRIPT_CHARS` (Task 1).
 - Produces: `parseTranscriptFile(filename: string, text: string): string`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/parse/transcript.test.ts`:
 
@@ -665,12 +665,12 @@ describe("parseTranscriptFile", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/parse/transcript.test.ts`
-Expected: FAIL — cannot find module `@/lib/parse/transcript`.
+Expected: FAIL â€” cannot find module `@/lib/parse/transcript`.
 
-- [ ] **Step 3: Implement the parser**
+- [x] **Step 3: Implement the parser**
 
 `lib/parse/transcript.ts`:
 
@@ -698,29 +698,47 @@ export function parseTranscriptFile(filename: string, text: string): string {
 }
 
 /**
- * Strips WEBVTT structure while KEEPING speaker labels — `<v Tutor>text</v>` becomes
+ * Strips WEBVTT structure while KEEPING speaker labels â€” `<v Tutor>text</v>` becomes
  * `Tutor: text`. Attribution is what lets extraction fill the commitment owner, so
  * dropping speaker tags would discard the signal the whole feature depends on.
  */
 function parseVtt(text: string): string {
   return text
-    .split(/\r?\n/)
-    .filter((line) => {
-      const t = line.trim();
-      if (t === "" || t === "WEBVTT") return false;
-      if (t.includes("-->")) return false;
-      if (/^\d+$/.test(t)) return false;
-      if (/^(NOTE|STYLE|REGION)\b/.test(t)) return false;
-      return true;
-    })
-    .map((line) => line.replace(/<v\s+([^>]+)>(.*?)<\/v>/g, "$1: $2").replace(/<[^>]+>/g, "").trim())
+    .split(/\r?\n\s*\r?\n/)
+    .map((block) =>
+      block
+        .split(/\r?\n/)
+        .filter((line) => {
+          const t = line.trim();
+          if (t === "" || t === "WEBVTT") return false;
+          if (t.includes("-->")) return false;
+          if (/^\d+$/.test(t)) return false;
+          if (/^(NOTE|STYLE|REGION)\b/.test(t)) return false;
+          return true;
+        })
+        .join(" ")
+        .trim(),
+    )
+    .filter((block) => block.length > 0)
+    .map((block) =>
+      block
+        .replace(/<v\s+([^>]+)>/, "$1: ")
+        .replace(/<[^>]+>/g, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
     .join("\n");
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes + commit**
+Cues are parsed as blocks, not lines: a caption that wraps across two lines still has its
+`<v Speaker>` opening tag on the first line and `</v>` on the second, so a line-at-a-time
+regex loses the speaker entirely. Owner attribution depends on that label surviving. Add a test
+covering a cue whose `<v Speaker>` opens on one line and `</v>` closes on the next.
 
-Run: `npx vitest run tests/parse/transcript.test.ts` → PASS (7 tests)
+- [x] **Step 4: Run test to verify it passes + commit**
+
+Run: `npx vitest run tests/parse/transcript.test.ts` â†’ PASS (7 tests)
 
 ```bash
 git add -A && git commit -m "feat: transcript file parsing for txt, md, and vtt"
@@ -728,7 +746,7 @@ git add -A && git commit -m "feat: transcript file parsing for txt, md, and vtt"
 
 ---
 
-### Task 5: Migration 0002 — extraction state columns
+### Task 5: Migration 0002 â€” extraction state columns
 
 **Files:**
 - Create: `supabase/migrations/0002_phase2_columns.sql`
@@ -737,7 +755,7 @@ git add -A && git commit -m "feat: transcript file parsing for txt, md, and vtt"
 **Interfaces:**
 - Produces: `transcript.injection_flags`, `transcript.extraction_status`, `transcript.extraction_error`, `commitment.source_flagged`.
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 `supabase/migrations/0002_phase2_columns.sql`:
 
@@ -759,7 +777,7 @@ alter table commitment
 -- both tables already carry org_id and their RLS policies are org-scoped.
 ```
 
-- [ ] **Step 2: Add the failing cross-org test for transcripts**
+- [x] **Step 2: Add the failing cross-org test for transcripts**
 
 Append to `tests/rls.test.ts`, inside the existing `describe("RLS org isolation", ...)` block:
 
@@ -780,12 +798,12 @@ Append to `tests/rls.test.ts`, inside the existing `describe("RLS org isolation"
   });
 ```
 
-- [ ] **Step 3: Apply the migration and run the tests**
+- [x] **Step 3: Apply the migration and run the tests**
 
 Run: `npm run db:reset && npx vitest run tests/rls.test.ts`
-Expected: PASS — 6 tests in the file (4 existing + 2 new).
+Expected: PASS â€” 6 tests in the file (4 existing + 2 new).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A && git commit -m "feat: migration 0002 adds extraction state and injection flag columns"
@@ -803,7 +821,7 @@ git add -A && git commit -m "feat: migration 0002 adds extraction state and inje
 - Produces: `generateFollowUpDraft(input: DraftInput, model?: LanguageModel): Promise<GeneratedDraft>` where
   `DraftInput = { commitmentText: string; clientName: string; deadline: string | null; sourceSpan: string }`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/agent/draft.test.ts`:
 
@@ -850,12 +868,12 @@ describe("generateFollowUpDraft", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/agent/draft.test.ts`
-Expected: FAIL — cannot find module `@/lib/agent/draft`.
+Expected: FAIL â€” cannot find module `@/lib/agent/draft`.
 
-- [ ] **Step 3: Implement draft generation**
+- [x] **Step 3: Implement draft generation**
 
 `lib/agent/draft.ts`:
 
@@ -885,9 +903,9 @@ export async function generateFollowUpDraft(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes + commit**
+- [x] **Step 4: Run test to verify it passes + commit**
 
-Run: `npx vitest run tests/agent/draft.test.ts` → PASS (2 tests)
+Run: `npx vitest run tests/agent/draft.test.ts` â†’ PASS (2 tests)
 
 ```bash
 git add -A && git commit -m "feat: follow-up draft generation"
@@ -909,7 +927,7 @@ git add -A && git commit -m "feat: follow-up draft generation"
 
 This task holds the whole write sequence as a plain function taking an injected client, because a Server Action calls `cookies()` and cannot run under Vitest. The Server Action in Task 8 becomes a thin wrapper.
 
-- [ ] **Step 1: Write the failing integration test**
+- [x] **Step 1: Write the failing integration test**
 
 `tests/ingest/run.test.ts`:
 
@@ -1020,12 +1038,12 @@ describe("runIngest", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm run db:reset && npx vitest run tests/ingest/run.test.ts`
-Expected: FAIL — cannot find module `@/lib/ingest/run`.
+Expected: FAIL â€” cannot find module `@/lib/ingest/run`.
 
-- [ ] **Step 3: Implement the write sequence**
+- [x] **Step 3: Implement the write sequence**
 
 `lib/ingest/run.ts`:
 
@@ -1130,7 +1148,7 @@ async function finishIngest(
     inserted = data ?? [];
   }
 
-  // A draft failing is not an ingest failing — that commitment keeps the empty-draft state.
+  // A draft failing is not an ingest failing â€” that commitment keeps the empty-draft state.
   const drafts = await Promise.allSettled(inserted.map(async (row, i) => {
     const c = extracted.commitments[i];
     const draft = await generateFollowUpDraft({
@@ -1166,13 +1184,13 @@ async function finishIngest(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
-Run: `npx vitest run tests/ingest/run.test.ts` → PASS (4 tests)
+Run: `npx vitest run tests/ingest/run.test.ts` â†’ PASS (4 tests)
 
 If `logAudit` fails because `lib/audit/log.ts` imports `server-only`, add `"server-only"` to `test.server.deps.inline` in `vitest.config.ts`, or set `alias: { "server-only": path.resolve(__dirname, "tests/stubs/server-only.ts") }` with that stub file containing `export {};`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: ingest write sequence with failure state and agent audit rows"
@@ -1190,7 +1208,7 @@ git add -A && git commit -m "feat: ingest write sequence with failure state and 
 - Consumes: `runIngest`, `retryExtractionFor` (Task 7); `getCurrentOrgId` (Phase 1); `parseTranscriptFile` (Task 4).
 - Produces: `ingestTranscript(formData: FormData): Promise<void>`, `retryExtraction(transcriptId: string): Promise<void>`, `listClients(orgId): Promise<ClientContact[]>`.
 
-- [ ] **Step 1: Add the client list query**
+- [x] **Step 1: Add the client list query**
 
 Append to `lib/db/queries.ts`:
 
@@ -1205,7 +1223,7 @@ export async function listClients(orgId: string): Promise<ClientContact[]> {
 }
 ```
 
-- [ ] **Step 2: Write the server actions**
+- [x] **Step 2: Write the server actions**
 
 `app/actions/ingest.ts`:
 
@@ -1263,7 +1281,7 @@ export async function retryExtraction(transcriptId: string) {
 }
 ```
 
-- [ ] **Step 3: Build the form**
+- [x] **Step 3: Build the form**
 
 `components/ingest/IngestForm.tsx`:
 
@@ -1321,10 +1339,10 @@ export function IngestForm({ clients }: { clients: ClientContact[] }) {
 
       <label style={label}>Paste the transcript
         <textarea name="transcript" rows={10} style={{ ...field, resize: "vertical" }}
-          placeholder="Tutor: I'll send the practice set by Friday…" />
+          placeholder="Tutor: I'll send the practice set by Fridayâ€¦" />
       </label>
 
-      <label style={label}>…or upload a file (.txt, .md, .vtt)
+      <label style={label}>â€¦or upload a file (.txt, .md, .vtt)
         <input name="file" type="file" accept=".txt,.md,.vtt" style={field} />
       </label>
 
@@ -1332,10 +1350,10 @@ export function IngestForm({ clients }: { clients: ClientContact[] }) {
         style={{ marginTop: 24, background: "var(--accent)", color: "#fff", padding: "10px 18px",
           borderRadius: 8, border: 0, fontWeight: 600,
           opacity: isPending ? 0.6 : 1, cursor: isPending ? "not-allowed" : "pointer" }}>
-        {isPending ? "Extracting…" : "Extract commitments"}
+        {isPending ? "Extractingâ€¦" : "Extract commitments"}
       </button>
       <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 10 }}>
-        Extraction takes a few seconds. Nothing is sent — everything lands in your queue for review.
+        Extraction takes a few seconds. Nothing is sent â€” everything lands in your queue for review.
       </p>
       {error && <div className="mono" style={{ color: "#E5484D", fontSize: 13, marginTop: 12 }}>{error}</div>}
     </form>
@@ -1343,7 +1361,7 @@ export function IngestForm({ clients }: { clients: ClientContact[] }) {
 }
 ```
 
-- [ ] **Step 4: Build the page**
+- [x] **Step 4: Build the page**
 
 `app/(app)/ingest/page.tsx`:
 
@@ -1360,7 +1378,7 @@ export default async function IngestPage() {
     <main style={{ maxWidth: 640, margin: "0 auto", padding: "40px 24px" }}>
       <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Add a transcript</h1>
       <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>Sign in to add a transcript.</p>
-      <Link href="/onboarding" style={{ color: "var(--accent)" }}>Go to sign in →</Link>
+      <Link href="/onboarding" style={{ color: "var(--accent)" }}>Go to sign in â†’</Link>
     </main>);
 
   const clients = await listClients(orgId);
@@ -1376,7 +1394,7 @@ export default async function IngestPage() {
 }
 ```
 
-- [ ] **Step 5: Verify + commit**
+- [x] **Step 5: Verify + commit**
 
 Run: `npx tsc --noEmit && npm run build`
 Expected: no type errors; build succeeds.
@@ -1398,7 +1416,7 @@ git add -A && git commit -m "feat: transcript ingest form and server actions"
 - Consumes: `commitment.source_flagged` (Task 5), `transcript.injection_flags` (Task 5).
 - Produces: `getTranscriptForCommitment(commitmentId: string): Promise<Transcript | null>`.
 
-- [ ] **Step 1: Add the transcript lookup**
+- [x] **Step 1: Add the transcript lookup**
 
 Append to `lib/db/queries.ts`:
 
@@ -1416,7 +1434,7 @@ export async function getTranscriptForCommitment(commitmentId: string): Promise<
 }
 ```
 
-- [ ] **Step 2: Add the queue chip**
+- [x] **Step 2: Add the queue chip**
 
 In `components/queue/CommitmentList.tsx`, inside the `<span>` holding `<Chip>` and `<StatusDot>`, before the confidence chip:
 
@@ -1425,12 +1443,12 @@ In `components/queue/CommitmentList.tsx`, inside the `<span>` holding `<Chip>` a
   <span title="This transcript contained instruction-like text"
     style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999,
       border: "1px solid #E0A23C", color: "#E0A23C" }}>
-    ⚠ flagged source
+    âš  flagged source
   </span>
 )}
 ```
 
-- [ ] **Step 3: Add the review-screen banner**
+- [x] **Step 3: Add the review-screen banner**
 
 In `app/(app)/queue/[commitmentId]/page.tsx`, import the lookup and render the banner above `<DraftSurface>`:
 
@@ -1453,16 +1471,16 @@ const transcript = await getTranscriptForCommitment(commitmentId);
     </div>
     <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 8 }}>
       This transcript contained text that reads like instructions to the assistant. It was treated
-      as data, never followed — but read this commitment carefully before approving.
+      as data, never followed â€” but read this commitment carefully before approving.
     </p>
     <div className="mono" style={{ color: "var(--muted)", fontSize: 12, marginTop: 8 }}>
-      matched: {transcript.injection_flags.join(" · ")}
+      matched: {transcript.injection_flags.join(" Â· ")}
     </div>
   </section>
 )}
 ```
 
-- [ ] **Step 4: Verify + commit**
+- [x] **Step 4: Verify + commit**
 
 Run: `npx tsc --noEmit && npm run build`
 Expected: no type errors; build succeeds.
@@ -1486,7 +1504,7 @@ git add -A && git commit -m "feat: surface injection flags in the queue and revi
 - Produces: `listFailedTranscripts(orgId: string): Promise<FailedTranscript[]>` where
   `FailedTranscript = { id: string; conversation_id: string; title: string; extraction_error: string | null }`.
 
-- [ ] **Step 1: Add the query**
+- [x] **Step 1: Add the query**
 
 Append to `lib/db/queries.ts`:
 
@@ -1509,7 +1527,7 @@ export async function listFailedTranscripts(orgId: string): Promise<FailedTransc
 }
 ```
 
-- [ ] **Step 2: Build the strip**
+- [x] **Step 2: Build the strip**
 
 `components/queue/NeedsAttention.tsx`:
 
@@ -1536,7 +1554,7 @@ export function NeedsAttention({ items }: { items: FailedTranscript[] }) {
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 8 }}>
         Extraction failed for {items.length === 1 ? "this transcript" : "these transcripts"}. The
-        text is saved — retrying re-runs extraction against it.
+        text is saved â€” retrying re-runs extraction against it.
       </p>
       <ul style={{ listStyle: "none", padding: 0, marginTop: 12 }}>
         {items.map((t) => (
@@ -1571,7 +1589,7 @@ export function NeedsAttention({ items }: { items: FailedTranscript[] }) {
 }
 ```
 
-- [ ] **Step 3: Mount it on the queue and add a link to /ingest**
+- [x] **Step 3: Mount it on the queue and add a link to /ingest**
 
 In `app/(app)/queue/page.tsx`, in the signed-in branch:
 
@@ -1587,15 +1605,15 @@ const [items, failed] = await Promise.all([listCommitments(orgId), listFailedTra
 Render `<NeedsAttention items={failed} />` directly above `<CommitmentList items={items} />`, and put a link beside the heading:
 
 ```tsx
-<Link href="/ingest" style={{ color: "var(--accent)", fontSize: 14 }}>Add a transcript →</Link>
+<Link href="/ingest" style={{ color: "var(--accent)", fontSize: 14 }}>Add a transcript â†’</Link>
 ```
 
-- [ ] **Step 4: Verify + commit**
+- [x] **Step 4: Verify + commit**
 
 Run: `npx tsc --noEmit && npm run build`
 Expected: no type errors; build succeeds.
 
-Manual check: with `AI_GATEWAY_API_KEY` unset or invalid, ingest a transcript — the action errors, and `/queue` shows the strip with a working Retry.
+Manual check: with `AI_GATEWAY_API_KEY` unset or invalid, ingest a transcript â€” the action errors, and `/queue` shows the strip with a working Retry.
 
 ```bash
 git add -A && git commit -m "feat: needs-attention strip with extraction retry"
@@ -1613,7 +1631,7 @@ git add -A && git commit -m "feat: needs-attention strip with extraction retry"
 - Consumes: `extractCommitments` (Task 3).
 - Produces: `npm run eval`.
 
-- [ ] **Step 1: Write the labelled fixtures**
+- [x] **Step 1: Write the labelled fixtures**
 
 `evals/transcripts/tutoring.json`:
 
@@ -1658,7 +1676,7 @@ git add -A && git commit -m "feat: needs-attention strip with extraction retry"
   "name": "agency",
   "conversationDate": "2026-08-11",
   "clientName": "Bloom Cafe",
-  "transcript": "Lead: We'll send three ad concepts by end of week and set up the reporting dashboard. Client: Can you also look at the landing page? Lead: We can review it, but that's outside the current scope — I'll send a quote first.",
+  "transcript": "Lead: We'll send three ad concepts by end of week and set up the reporting dashboard. Client: Can you also look at the landing page? Lead: We can review it, but that's outside the current scope â€” I'll send a quote first.",
   "expected": { "minCommitments": 3, "maxCommitments": 4, "withDeadline": 1, "withOwner": 0 }
 }
 ```
@@ -1676,7 +1694,7 @@ git add -A && git commit -m "feat: needs-attention strip with extraction retry"
 }
 ```
 
-- [ ] **Step 2: Write the runner**
+- [x] **Step 2: Write the runner**
 
 `evals/run.ts`:
 
@@ -1738,7 +1756,7 @@ async function main() {
 main().catch((e) => { console.error(e); process.exit(1); });
 ```
 
-- [ ] **Step 3: Add the script**
+- [x] **Step 3: Add the script**
 
 In `package.json` scripts, add:
 
@@ -1746,15 +1764,15 @@ In `package.json` scripts, add:
 "eval": "node --experimental-strip-types --env-file=.env.local evals/run.ts"
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `npm run eval`
-Expected: a table with five rows. Real model calls, so exact numbers vary — the runner passes when counts land in range, flagged fixtures flag, and every span verifies. Investigate any FAIL row before changing the prompt.
+Expected: a table with five rows. Real model calls, so exact numbers vary â€” the runner passes when counts land in range, flagged fixtures flag, and every span verifies. Investigate any FAIL row before changing the prompt.
 
 Run: `npx vitest run`
 Expected: the whole suite passes with no API key involved.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "feat: eval harness for extraction quality"
@@ -1767,7 +1785,7 @@ git add -A && git commit -m "feat: eval harness for extraction quality"
 **Files:**
 - Modify: `README.md`, `.env.local.example`
 
-- [ ] **Step 1: Document the new surface**
+- [x] **Step 1: Document the new surface**
 
 In `README.md`, add `/ingest` to the screens table:
 
@@ -1788,7 +1806,7 @@ change a prompt in `lib/agent/prompts.ts`.
 Add to **Local**, after the env step:
 
 ```md
-Set `AI_GATEWAY_API_KEY` in `.env.local` for extraction. `npm test` does not need it —
+Set `AI_GATEWAY_API_KEY` in `.env.local` for extraction. `npm test` does not need it â€”
 tests inject a mock model.
 ```
 
@@ -1799,7 +1817,7 @@ Add to **Troubleshooting**:
   saved: `/queue` shows it under "Needs attention" with a Retry button.
 ```
 
-- [ ] **Step 2: Run the full gate**
+- [x] **Step 2: Run the full gate**
 
 Run: `npm run db:reset && npx vitest run && npx tsc --noEmit && npm run build && npx eslint .`
 Expected: all tests pass, no type errors, build succeeds, lint clean.
@@ -1812,9 +1830,9 @@ vercel env add AI_GATEWAY_API_KEY preview
 vercel deploy
 ```
 
-Expected: deployment READY. Note the hosted database has no seed data, so `/ingest` there starts with no clients — use "Add a new client".
+Expected: deployment READY. Note the hosted database has no seed data, so `/ingest` there starts with no clients â€” use "Add a new client".
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A && git commit -m "docs: phase 2 ingest, eval harness, and troubleshooting"
@@ -1824,10 +1842,10 @@ git add -A && git commit -m "docs: phase 2 ingest, eval harness, and troubleshoo
 
 ## Self-Review
 
-**Spec coverage.** §4 data flow → Tasks 7–8. §4 span verification → Task 3. §4 deadline resolution → Task 3. §5 upload without storage → Tasks 4, 8. §6 migration `0002` → Task 5. §7 modules → Tasks 1–8, all seven files plus `lib/ingest/run.ts`. §7 queue "Needs attention" → Task 10. §8 security → Task 2 (prompt boundary), Task 3 (flags returned), Task 7 (flags persisted, `draft_task_list` checked against the contract), Task 9 (surfaced in UI). §9 failure table → Task 3 (cap, span, over-length), Task 4 (unsupported/empty file), Task 7 (model failure marks `failed`; draft failure non-fatal via `allSettled`), Task 10 (retry). §10 testing → Tasks 1–7 unit, Task 7 integration, Task 5 RLS, Task 11 eval. §11 environment → Tasks 1, 12. §12 done-criteria 1–9 all mapped.
+**Spec coverage.** Â§4 data flow â†’ Tasks 7â€“8. Â§4 span verification â†’ Task 3. Â§4 deadline resolution â†’ Task 3. Â§5 upload without storage â†’ Tasks 4, 8. Â§6 migration `0002` â†’ Task 5. Â§7 modules â†’ Tasks 1â€“8, all seven files plus `lib/ingest/run.ts`. Â§7 queue "Needs attention" â†’ Task 10. Â§8 security â†’ Task 2 (prompt boundary), Task 3 (flags returned), Task 7 (flags persisted, `draft_task_list` checked against the contract), Task 9 (surfaced in UI). Â§9 failure table â†’ Task 3 (cap, span, over-length), Task 4 (unsupported/empty file), Task 7 (model failure marks `failed`; draft failure non-fatal via `allSettled`), Task 10 (retry). Â§10 testing â†’ Tasks 1â€“7 unit, Task 7 integration, Task 5 RLS, Task 11 eval. Â§11 environment â†’ Tasks 1, 12. Â§12 done-criteria 1â€“9 all mapped.
 
-**Gap found and fixed:** §9 specifies one automatic retry on schema-validation failure, which no task originally implemented — AI SDK v6 does not retry `NoObjectGeneratedError` by default. Task 3 now wraps the `generateText` call in `callWithOneRetry`, with two tests covering the retry and the give-up path.
+**Gap found and fixed:** Â§9 specifies one automatic retry on schema-validation failure, which no task originally implemented â€” AI SDK v6 does not retry `NoObjectGeneratedError` by default. Task 3 now wraps the `generateText` call in `callWithOneRetry`, with two tests covering the retry and the give-up path.
 
 **Placeholder scan.** No TBD/TODO. Every code step carries real code; every test step carries real assertions and the exact command with expected result.
 
-**Type consistency.** `ExtractedCommitment` (Task 1) is consumed unchanged in Tasks 3, 7, 11. `ExtractInput`/`ExtractResult` names match between Task 3's definition and Task 7's call site. `IngestArgs`/`IngestResult` match between Task 7 and Task 8. `ClientContact` (Task 8) is used by `IngestForm`. `FailedTranscript` (Task 10) matches its component prop. `Transcript` (Task 1) matches `getTranscriptForCommitment` (Task 9). `canExecute` is imported from `lib/agent/execute-policy` in Task 7 — the Phase 1 module that has no `server-only` import, which is what lets the integration test run under Vitest.
+**Type consistency.** `ExtractedCommitment` (Task 1) is consumed unchanged in Tasks 3, 7, 11. `ExtractInput`/`ExtractResult` names match between Task 3's definition and Task 7's call site. `IngestArgs`/`IngestResult` match between Task 7 and Task 8. `ClientContact` (Task 8) is used by `IngestForm`. `FailedTranscript` (Task 10) matches its component prop. `Transcript` (Task 1) matches `getTranscriptForCommitment` (Task 9). `canExecute` is imported from `lib/agent/execute-policy` in Task 7 â€” the Phase 1 module that has no `server-only` import, which is what lets the integration test run under Vitest.
