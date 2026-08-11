@@ -36,6 +36,21 @@ describe("RLS org isolation", () => {
     expect(data).toBeNull();
     expect(error?.code).toBe("42501");
   });
+
+  it("user in org B cannot read org A transcripts", async () => {
+    const b = client(await jwt(userB));
+    const { data } = await b.from("transcript").select("id").eq("org_id", orgA);
+    expect(data).toEqual([]);
+  });
+
+  it("org A owner sees the phase 2 columns with their defaults", async () => {
+    const a = client(await jwt(userA));
+    const { data } = await a.from("transcript")
+      .select("injection_flags,extraction_status,extraction_error").eq("org_id", orgA).limit(1);
+    expect(data).not.toBeNull();
+    expect(data![0].extraction_status).toBe("pending");
+    expect(data![0].injection_flags).toEqual([]);
+  });
 });
 
 describe("audit_event is append-only", () => {
