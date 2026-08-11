@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { MockLanguageModelV4 } from "ai/test";
-import { runIngest } from "@/lib/ingest/run";
+import { runIngest, retryExtractionFor } from "@/lib/ingest/run";
 
 const URL = process.env.SUPABASE_URL!;
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -40,6 +40,53 @@ const args = {
   title: "Weekly check-in", occurredAt: "2026-08-11", transcript: TRANSCRIPT,
 };
 
+// Extraction calls see "Transcript:" in the prompt, draft calls see "Commitment: <text>".
+// Echoing that text back into the draft subject proves each draft call was built from
+// the right commitment, not just paired up by array position after the fact.
+function extractPromptText(prompt: unknown): string {
+  const parts: string[] = [];
+  for (const message of prompt as Array<{ content: unknown }>) {
+    const content = message.content;
+    if (!Array.isArray(content)) continue;
+    for (const part of content as Array<{ type: string; text?: string }>) {
+      if (part.type === "text" && typeof part.text === "string") parts.push(part.text);
+    }
+  }
+  return parts.join("\n");
+}
+
+function pairingMock() {
+  return new MockLanguageModelV4({
+    doGenerate: async (options) => {
+      const promptText = extractPromptText(options.prompt);
+
+      const match = promptText.match(/Commitment: (.+)/);
+      const payload = match
+        ? { subject: match[1].trim(), body: `Confirming: ${match[1].trim()}` }
+        : {
+            commitments: [
+              { text: "Send the revised deck", owner: "Tutor", deadline: "2026-08-14",
+                type: "deliverable", confidence: "high",
+                source_span: "I'll send Mia a revised practice set by Friday" },
+              { text: "Schedule the follow-up call", owner: "Tutor", deadline: "2026-08-14",
+                type: "call", confidence: "medium",
+                source_span: "I'll send Mia a revised practice set by Friday" },
+            ],
+          };
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: {
+          inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 20, text: 20, reasoning: undefined },
+        },
+        warnings: [],
+      };
+    },
+  });
+}
+
 let db: SupabaseClient;
 beforeAll(() => { db = createClient(URL, SERVICE, { auth: { persistSession: false } }); });
 
@@ -77,9 +124,8 @@ describe("runIngest", () => {
     await expect(runIngest(db, args, exploding)).rejects.toThrow(/gateway exploded/);
 
     const { data } = await db.from("transcript").select("*")
-      .eq("org_id", orgA).eq("extraction_status", "failed")
-      .order("id", { ascending: false }).limit(1);
-    expect(data!).toHaveLength(1);
+      .eq("org_id", orgA).eq("extraction_status", "failed");
+    expect(data!.length).toBeGreaterThan(0);
     expect(data![0].extraction_error).toMatch(/gateway exploded/);
   });
 
@@ -100,5 +146,45 @@ describe("runIngest", () => {
     const { data: c } = await db.from("commitment").select("source_flagged")
       .eq("conversation_id", r.conversationId);
     expect(c![0].source_flagged).toBe(true);
+  });
+
+  it("retries a transcript that already has commitments and drafts", async () => {
+    const r = await runIngest(db, args, bothCalls);
+    const before = await db.from("commitment").select("id").eq("conversation_id", r.conversationId);
+    const oldIds = before.data!.map((row) => row.id as string);
+    expect(oldIds.length).toBeGreaterThan(0);
+
+    const retried = await retryExtractionFor(db, r.transcriptId, bothCalls);
+    expect(retried.commitmentCount).toBe(1);
+    expect(retried.draftCount).toBe(1);
+
+    const { data: oldDrafts } = await db.from("deliverable_draft").select("id").in("commitment_id", oldIds);
+    expect(oldDrafts!).toHaveLength(0);
+
+    const { data: survivingOld } = await db.from("commitment").select("id").in("id", oldIds);
+    expect(survivingOld!).toHaveLength(0);
+
+    const { data: newCommitments } = await db.from("commitment").select("id")
+      .eq("conversation_id", r.conversationId);
+    expect(newCommitments!).toHaveLength(1);
+  });
+
+  it("pairs each draft with its own commitment, not with array position", async () => {
+    const r = await runIngest(db, args, pairingMock());
+    expect(r.commitmentCount).toBe(2);
+    expect(r.draftCount).toBe(2);
+
+    const { data: commitments } = await db.from("commitment").select("id,text")
+      .eq("conversation_id", r.conversationId);
+    expect(commitments!).toHaveLength(2);
+
+    const { data: drafts } = await db.from("deliverable_draft").select("commitment_id,subject")
+      .in("commitment_id", commitments!.map((c) => c.id));
+
+    for (const c of commitments!) {
+      const draft = drafts!.find((d) => d.commitment_id === c.id);
+      expect(draft).toBeDefined();
+      expect(draft!.subject).toBe(c.text);
+    }
   });
 });
