@@ -9,8 +9,8 @@ export function SignOutButton() {
   return (
     <form action={() => startTransition(async () => { await signOut(); })}>
       <button type="submit" disabled={isPending}
-        style={{ ...buttonStyle("ghost", isPending), fontSize: "var(--text-sm)",
-          padding: "5px 10px" }}>
+        style={{ ...buttonStyle("ghost", isPending), height: 28,
+          fontSize: "var(--text-sm)", padding: "0 9px" }}>
         {isPending ? "Signing out…" : "Sign out"}
       </button>
     </form>

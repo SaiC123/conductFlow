@@ -57,7 +57,7 @@ export function NeedsAttention({ items }: { items: FailedTranscript[] }) {
       </ul>
 
       {error && (
-        <p role="alert" style={{ color: "var(--danger)", marginTop: "var(--space-3)" }}>
+        <p role="alert" style={{ color: "var(--danger-text)", marginTop: "var(--space-3)" }}>
           That retry did not go through.{" "}
           <span className="mono" style={{ color: "var(--muted)" }}>{error}</span>
         </p>

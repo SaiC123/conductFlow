@@ -3,7 +3,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateBlueprint } from "@/app/actions/blueprint";
 import { HARD_PROHIBITED, ALWAYS_NEEDS_APPROVAL } from "@/lib/agent/blueprint";
-import { Card, CardTitle, Badge, buttonStyle, fieldStyle } from "@/components/ui/primitives";
+import {
+  Card, CardTitle, Badge, SectionHeading, buttonStyle, fieldStyle,
+} from "@/components/ui/primitives";
 
 const DESCRIPTIONS: Record<string, string> = {
   draft_recap: "Write a recap of what was said",
@@ -98,8 +100,9 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
                 background: "var(--surface)", padding: "var(--space-3) var(--space-4)",
                 minWidth: 0,
                 // The rule reads the row's answer before any text does.
-                borderLeft: `3px solid ${current === "unattended" ? "var(--accent)"
+                borderLeft: `2px solid ${current === "unattended" ? "var(--accent)"
                   : current === "approval" ? "var(--border-strong)" : "transparent"}`,
+                transition: "border-color var(--motion)",
               }}>
                 <div style={{ display: "grid", gap: "var(--space-3)",
                   gridTemplateColumns: "minmax(200px, 1fr) auto", alignItems: "center" }}>
@@ -162,8 +165,8 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
         footnote: named in plain English, with the machine name underneath, and stated as
         something no setting reaches.
       */}
-      <section style={{ marginTop: "var(--space-6)", border: "1px solid var(--border-strong)",
-        borderLeft: "3px solid var(--danger)", borderRadius: "var(--radius)",
+      <section style={{ marginTop: "var(--space-7)", border: "1px solid var(--border-strong)",
+        borderLeft: "2px solid var(--danger)", borderRadius: "var(--radius)",
         background: "var(--raised)", padding: "var(--space-4)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
           gap: "var(--space-3)", flexWrap: "wrap" }}>
@@ -182,8 +185,8 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
               gap: "var(--space-3)", border: "1px solid var(--border)",
               borderRadius: "var(--radius-sm)", padding: "var(--space-3)",
               background: "var(--canvas)" }}>
-              <span aria-hidden className="mono" style={{ color: "var(--danger)",
-                fontSize: "var(--text-sm)" }}>✕</span>
+              <span aria-hidden className="mono" style={{ color: "var(--danger-text)",
+                fontSize: "var(--text-sm)", lineHeight: 1.5 }}>✕</span>
               <span>
                 {NEVER[action] ?? action}
                 <span className="mono" style={{ display: "block", color: "var(--faint)",
@@ -194,12 +197,9 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
         </ul>
       </section>
 
-      <section style={{ marginTop: "var(--space-6)" }}>
-        <h2 style={{ fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "0.08em",
-          textTransform: "uppercase", color: "var(--muted)" }}>
-          Operating limits
-        </h2>
-        <Card style={{ marginTop: "var(--space-3)" }}>
+      <section style={{ marginTop: "var(--space-7)" }}>
+        <SectionHeading>Operating limits</SectionHeading>
+        <Card>
           <div style={{ display: "grid", gap: "var(--space-4)",
             gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
             <label style={{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>
@@ -231,8 +231,7 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
           <>
             <button type="submit" disabled={isPending} aria-busy={isPending}
               // Reserved width: the label changes while saving and must not resize.
-              style={{ ...buttonStyle("primary", isPending), minWidth: 148,
-                justifyContent: "center" }}>
+              style={{ ...buttonStyle("primary", isPending), minWidth: 148 }}>
               {isPending ? "Saving…" : "Save blueprint"}
             </button>
             <span style={{ color: "var(--muted)", fontSize: "var(--text-sm)" }}>
@@ -252,7 +251,7 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
         </p>
       )}
       {error && (
-        <p role="alert" style={{ color: "var(--danger)", marginTop: "var(--space-3)" }}>
+        <p role="alert" style={{ color: "var(--danger-text)", marginTop: "var(--space-3)" }}>
           That change was refused.{" "}
           <span className="mono" style={{ color: "var(--muted)" }}>{error}</span>
         </p>

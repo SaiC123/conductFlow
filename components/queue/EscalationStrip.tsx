@@ -112,7 +112,8 @@ export function EscalationStrip({ items }: { items: OpenEscalation[] }) {
               <span style={{ display: "flex", alignItems: "center", gap: "var(--space-2)",
                 flexShrink: 0 }}>
                 {e.commitment_id && (
-                  <Link href={`/queue/${e.commitment_id}`} style={buttonStyle("ghost")}>
+                  <Link href={`/queue/${e.commitment_id}`} className="cf-btn"
+                    style={buttonStyle("ghost")}>
                     Review
                   </Link>
                 )}
@@ -141,7 +142,7 @@ export function EscalationStrip({ items }: { items: OpenEscalation[] }) {
       )}
 
       {error && (
-        <p role="alert" style={{ color: "var(--danger)", marginTop: "var(--space-3)" }}>
+        <p role="alert" style={{ color: "var(--danger-text)", marginTop: "var(--space-3)" }}>
           That could not be cleared.{" "}
           <span className="mono" style={{ color: "var(--muted)" }}>{error}</span>
         </p>

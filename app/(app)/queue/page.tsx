@@ -5,17 +5,18 @@ import {
 import { CommitmentList } from "@/components/queue/CommitmentList";
 import { NeedsAttention } from "@/components/queue/NeedsAttention";
 import { EscalationStrip } from "@/components/queue/EscalationStrip";
-import { PageHeader, EmptyState, buttonStyle } from "@/components/ui/primitives";
+import { PageHeader, EmptyState, buttonStyle, pageStyle } from "@/components/ui/primitives";
 
 export default async function QueuePage() {
   const orgId = await getCurrentOrgId();
   if (!orgId) return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "var(--space-6) var(--space-5)" }}>
+    <main style={pageStyle}>
       <PageHeader title="Commitment queue" />
       <EmptyState
         title="Sign in to see your commitments"
         body="ConductFlow keeps every promise your team made in one reviewable list."
-        action={<Link href="/onboarding" style={buttonStyle("primary")}>Sign in</Link>}
+        action={<Link href="/onboarding" className="cf-btn"
+          style={buttonStyle("primary")}>Sign in</Link>}
       />
     </main>);
 
@@ -26,19 +27,16 @@ export default async function QueuePage() {
   const needsReview = items.filter((c) => c.status === "proposed").length;
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "var(--space-6) var(--space-5)" }}>
+    <main style={pageStyle}>
+      {/* The count is the one number an owner checks on arrival, so it sits in the header
+          rather than floating above the list. */}
       <PageHeader
         title="Commitment queue"
         lede="Every promise the assistant found, waiting on you. It drafts and proposes; nothing reaches a client until you approve it."
+        meta={items.length > 0
+          ? `${needsReview} awaiting review · ${items.length} total`
+          : undefined}
       />
-
-      {/* The count is the one number an owner checks on arrival, so it reads before the list. */}
-      {items.length > 0 && (
-        <p className="mono" style={{ color: "var(--faint)", fontSize: "var(--text-xs)",
-          marginBottom: "var(--space-3)" }}>
-          {needsReview} awaiting review · {items.length} total
-        </p>
-      )}
 
       {/* Escalations first: a complaint outranks the queue it came from. */}
       <EscalationStrip items={escalations} />

@@ -35,10 +35,12 @@ function Segmented({ options, value, onChange, name, disabled }: {
             disabled={disabled}
             onClick={() => onChange(o.value)}
             style={{
-              border: 0, borderRadius: 4, padding: "5px 12px",
+              border: 0, borderRadius: 3, padding: "5px 12px",
               fontSize: "var(--text-sm)", fontWeight: active ? 600 : 400,
-              background: active ? "var(--raised)" : "transparent",
-              color: active ? "var(--text)" : "var(--muted)",
+              // The inactive half defers to the shared button variables, so it picks up
+              // the same hover the rest of the app's controls have.
+              background: active ? "var(--raised)" : "var(--btn-bg-ghost)",
+              color: active ? "var(--text)" : "var(--btn-fg-ghost)",
               transition: "background var(--motion), color var(--motion)",
             }}>
             {o.label}
@@ -80,8 +82,9 @@ export function IngestForm({ clients }: { clients: ClientContact[] }) {
         </label>
         {clients.length > 0 && (
           <button type="button" onClick={() => setAddingClient((v) => !v)}
-            style={{ ...buttonStyle("ghost"), padding: "4px 0", marginTop: "var(--space-2)",
-              color: "var(--accent)" }}>
+            style={{ ...buttonStyle("ghost"), height: 24, padding: 0,
+              marginTop: "var(--space-2)", fontSize: "var(--text-sm)",
+              background: "transparent", color: "var(--accent-text)" }}>
             {addingClient ? "Choose an existing client" : "Add a new client"}
           </button>
         )}
@@ -131,9 +134,9 @@ export function IngestForm({ clients }: { clients: ClientContact[] }) {
       {isPending ? (
         <Card tone="accent" style={{ marginTop: "var(--space-5)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-            <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999,
+            <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999,
               background: "var(--accent)", animation: "cf-pulse 1.4s ease-in-out infinite" }} />
-            <span style={{ fontWeight: 600, color: "var(--accent)" }}>
+            <span style={{ fontWeight: 600, color: "var(--accent-text)" }}>
               Reading the conversation…
             </span>
           </div>
@@ -145,7 +148,8 @@ export function IngestForm({ clients }: { clients: ClientContact[] }) {
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)",
           flexWrap: "wrap", marginTop: "var(--space-5)" }}>
-          <button type="submit" style={{ ...buttonStyle("primary"), padding: "9px 18px" }}>
+          <button type="submit" style={{ ...buttonStyle("primary"), height: 34,
+            padding: "0 16px" }}>
             Find the promises
           </button>
           <span style={{ color: "var(--muted)", fontSize: "var(--text-sm)" }}>
@@ -156,7 +160,7 @@ export function IngestForm({ clients }: { clients: ClientContact[] }) {
 
       {error && (
         <Card tone="danger" style={{ marginTop: "var(--space-4)" }}>
-          <div style={{ fontWeight: 600, color: "var(--danger)" }}>That didn&apos;t go through</div>
+          <div style={{ fontWeight: 600, color: "var(--danger-text)" }}>That didn&apos;t go through</div>
           <p className="mono" style={{ color: "var(--muted)", fontSize: "var(--text-sm)",
             marginTop: "var(--space-2)", wordBreak: "break-word" }}>
             {error}

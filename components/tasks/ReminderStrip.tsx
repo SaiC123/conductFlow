@@ -124,7 +124,7 @@ export function ReminderStrip({ items, nowIso }: { items: OpenReminder[]; nowIso
 
       {note && <p style={{ color: "var(--muted)", marginTop: "var(--space-3)" }}>{note}</p>}
       {error && (
-        <p role="alert" style={{ color: "var(--danger)", marginTop: "var(--space-3)" }}>
+        <p role="alert" style={{ color: "var(--danger-text)", marginTop: "var(--space-3)" }}>
           {error}
         </p>
       )}

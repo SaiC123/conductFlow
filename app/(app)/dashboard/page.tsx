@@ -2,36 +2,37 @@ import Link from "next/link";
 import { getCurrentOrgId, listCommitments } from "@/lib/db/queries";
 import { computeMetrics } from "@/lib/metrics";
 import { StatTile } from "@/components/ui/StatTile";
-import { Meter, SectionTitle } from "@/components/ops/Measures";
-import { PageHeader, Card, EmptyState, buttonStyle, proseStyle } from "@/components/ui/primitives";
+import { Meter } from "@/components/ops/Measures";
+import {
+  PageHeader, Card, EmptyState, SectionHeading, buttonStyle, pageStyle, proseStyle,
+  statGridStyle,
+} from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
-
-const shell: React.CSSProperties = {
-  maxWidth: 900, margin: "0 auto", padding: "var(--space-6) var(--space-5)",
-};
 
 export default async function Dashboard() {
   const orgId = await getCurrentOrgId();
   if (!orgId) return (
-    <main style={shell}>
+    <main style={pageStyle}>
       <PageHeader title="Promise risk" />
       <EmptyState
         title="Sign in to see your promise risk"
         body="One screen for the question that matters: is your team keeping what it said it would?"
-        action={<Link href="/onboarding" style={buttonStyle("primary")}>Sign in</Link>}
+        action={<Link href="/onboarding" className="cf-btn"
+          style={buttonStyle("primary")}>Sign in</Link>}
       />
     </main>);
 
   const m = computeMetrics(await listCommitments(orgId));
 
   if (m.total === 0) return (
-    <main style={shell}>
+    <main style={pageStyle}>
       <PageHeader title="Promise risk" />
       <EmptyState
         title="Nothing to measure yet"
         body="Add one client conversation and this becomes a live read on what your team promised and whether it landed."
-        action={<Link href="/ingest" style={buttonStyle("primary")}>Add a transcript</Link>}
+        action={<Link href="/ingest" className="cf-btn"
+          style={buttonStyle("primary")}>Add a transcript</Link>}
       />
     </main>);
 
@@ -41,16 +42,16 @@ export default async function Dashboard() {
   const missingPct = 100 - m.withOwnerAndDeadlinePct;
 
   return (
-    <main style={shell}>
+    <main style={pageStyle}>
       <PageHeader
         title="Promise risk"
         lede="Whether your team is keeping its word, drawn from every commitment the assistant has extracted."
-        actions={<Link href="/tasks" style={buttonStyle("secondary")}>Task board</Link>}
+        actions={<Link href="/tasks" className="cf-btn"
+          style={buttonStyle("secondary")}>Task board</Link>}
       />
 
       {/* One hero figure per view: the number that means somebody is being let down today. */}
-      <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap",
-        alignItems: "stretch" }}>
+      <div style={statGridStyle}>
         <StatTile
           hero
           label="Past their date"
@@ -80,8 +81,8 @@ export default async function Dashboard() {
         />
       </div>
 
-      <section style={{ marginTop: "var(--space-6)" }}>
-        <SectionTitle>Where promises go missing</SectionTitle>
+      <section style={{ marginTop: "var(--space-7)" }}>
+        <SectionHeading>Where promises go missing</SectionHeading>
         <Card>
           <Meter
             pct={m.withOwnerAndDeadlinePct}
@@ -95,7 +96,7 @@ export default async function Dashboard() {
               : `A promise with nobody's name on it, or no date, is the kind that gets missed without anyone deciding to miss it. ${missingPct}% of what has been extracted is in that state.`}
           </p>
           {missingPct > 0 && (
-            <Link href="/queue" style={{ ...buttonStyle("secondary"),
+            <Link href="/queue" className="cf-btn" style={{ ...buttonStyle("secondary"),
               marginTop: "var(--space-4)" }}>
               Review the queue
             </Link>
@@ -104,7 +105,7 @@ export default async function Dashboard() {
       </section>
 
       <p style={{ color: "var(--faint)", fontSize: "var(--text-sm)",
-        marginTop: "var(--space-5)" }}>
+        marginTop: "var(--space-6)", ...proseStyle }}>
         Counts are live, not a snapshot — they move as commitments are approved and delivered.{" "}
         <Link href="/operations">See how your team usually works →</Link>
       </p>

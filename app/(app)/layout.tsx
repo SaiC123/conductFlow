@@ -15,10 +15,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <>
+      {/* Off-screen until it is focused, which is the whole point: a keyboard user should
+          not have to tab through five destinations to reach the queue. */}
+      <a href="#main" className="skip-link">Skip to content</a>
       <AppNav email={email} />
-      {/* The pages own their <main>; this wrapper is only a landmark id, so a skip link
-          can be added once there is a stylesheet that can reveal it on focus. */}
-      <div id="main">{children}</div>
+      {/* The pages own their <main>; this wrapper is the skip link's target, and takes
+          tabIndex so the browser will actually move focus into it. */}
+      <div id="main" tabIndex={-1} style={{ outline: "none" }}>{children}</div>
     </>
   );
 }

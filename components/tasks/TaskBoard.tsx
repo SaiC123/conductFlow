@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setTaskStatus } from "@/app/actions/tasks";
-import { Badge, StatusPill, buttonStyle } from "@/components/ui/primitives";
+import { Badge, SectionHeading, StatusPill, buttonStyle } from "@/components/ui/primitives";
 import type { BoardTask } from "@/lib/db/queries";
 import type { TaskStatus } from "@/lib/tasks/transitions";
 
@@ -118,22 +118,12 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
 
         return (
           <section key={col.status} aria-label={col.label}>
-            <header style={{ display: "flex", justifyContent: "space-between",
-              alignItems: "baseline", paddingBottom: "var(--space-2)",
-              borderBottom: "1px solid var(--border)", marginBottom: "var(--space-3)" }}>
-              <h2 style={{ fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "0.08em",
-                textTransform: "uppercase", color: archive ? "var(--faint)" : "var(--muted)" }}>
-                {col.label}
-              </h2>
-              <span className="mono" style={{ fontSize: "var(--text-sm)", color: "var(--faint)" }}>
-                {tasks.length}
-              </span>
-            </header>
+            <SectionHeading note={String(tasks.length)}>{col.label}</SectionHeading>
 
             {tasks.length === 0 ? (
               <p style={{ color: "var(--faint)", fontSize: "var(--text-sm)",
                 border: "1px dashed var(--border)", borderRadius: "var(--radius)",
-                padding: "var(--space-4)", margin: 0 }}>
+                padding: "var(--space-4)", margin: 0, lineHeight: 1.5 }}>
                 {col.hint}
               </p>
             ) : (
@@ -149,7 +139,7 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
                       position: "relative", overflow: "hidden",
                       background: "var(--surface)", borderRadius: "var(--radius)",
                       border: "1px solid var(--border)",
-                      borderLeft: `3px solid ${RULE[urgency]}`,
+                      borderLeft: `2px solid ${RULE[urgency]}`,
                       padding: "var(--space-3)",
                       // Delivered work is reference, not the job: present but receded.
                       opacity: archive ? 0.72 : 1,
@@ -175,7 +165,7 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
                         ) : (
                           <>
                             <span className="mono" style={{ fontSize: "var(--text-xs)",
-                              color: urgency === "late" ? "var(--danger)" : "var(--muted)" }}>
+                              color: urgency === "late" ? "var(--danger-text)" : "var(--muted)" }}>
                               {isoDay(t.due)}
                             </span>
                             {urgency === "late" && (
@@ -201,10 +191,10 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
                             onClick={() => move(t.id, m.next)}
                             style={{
                               ...buttonStyle(m.lead ? "secondary" : "ghost", pending),
-                              padding: "5px 10px", fontSize: "var(--text-sm)",
+                              height: 26, padding: "0 9px", fontSize: "var(--text-sm)",
                               // Reserved width on the lead button: its label swaps while the
                               // move is in flight and the row must not jump.
-                              ...(m.lead ? { minWidth: 116, justifyContent: "center" } : null),
+                              ...(m.lead ? { minWidth: 112 } : null),
                             }}>
                             {pending && m.lead ? "Saving…" : m.label}
                           </button>
@@ -217,7 +207,7 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
                       </div>
 
                       {error && (
-                        <p role="alert" style={{ color: "var(--danger)",
+                        <p role="alert" style={{ color: "var(--danger-text)",
                           fontSize: "var(--text-sm)", marginTop: "var(--space-2)" }}>
                           {error}
                         </p>

@@ -3,29 +3,64 @@
 /*
  * One place where the product's look is decided. Screens compose tokens and the
  * primitives in components/ui; they do not invent colours, spacing, or type sizes.
+ *
+ * The rules below the token block exist because inline styles cannot express them:
+ * :hover, :focus-visible, position: sticky with a backdrop, and the skip link. Anything
+ * a style object can say is said in the primitives instead.
  */
 :root {
-  /* Surfaces, darkest to lightest. Three levels is enough depth for an ops tool. */
+  /*
+   * Surfaces, darkest to lightest, each with the hover step it needs. A row that answers
+   * the pointer should not have to invent its own colour, so the step ships with the
+   * surface it belongs to.
+   */
   --canvas: #0A0A0B;
   --surface: #131316;
+  --surface-hover: #191920;
   --raised: #1A1A20;
+  --raised-hover: #22222A;
+
+  /* Depth on a near-black canvas reads as an edge, not a shadow. Two weights is enough. */
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
+  --border-loud: rgba(255, 255, 255, 0.22);
 
+  /*
+   * Three text steps, and every one of them clears 4.5:1 on --canvas, --surface and
+   * --raised. "Quiet" is allowed to mean low-priority; it is never allowed to mean
+   * hard to read.
+   */
   --text: #EDEDEF;
   --muted: #9A9AA5;
-  --faint: #6E6E78;
+  --faint: #868692;
 
-  --accent: #6366F1;
-  --accent-hover: #7C7FF5;
-  --accent-quiet: rgba(99, 102, 241, 0.12);
+  /*
+   * One accent, split by the job it is doing. --accent is the mark: fills, rails, bars,
+   * the meter. It is dark enough that white sits on it at 4.9:1. --accent-text is the
+   * same hue lifted until it clears 4.5:1 as text on a dark surface. A single token
+   * cannot be both — at the midpoint it fails in both directions, which is where this
+   * palette started.
+   */
+  --accent: #5B5EF0;
+  --accent-hover: #6C6FF3;
+  --accent-text: #8B8DF7;
+  --accent-quiet: rgba(91, 94, 240, 0.12);
+  --accent-line: rgba(91, 94, 240, 0.42);
 
+  /* Same split, same reason: a solid mark, a quiet fill, a hairline, a legible text step. */
   --ok: #3FB68B;
   --ok-quiet: rgba(63, 182, 139, 0.10);
+  --ok-line: rgba(63, 182, 139, 0.32);
   --warn: #E0A23C;
   --warn-quiet: rgba(224, 162, 60, 0.10);
+  --warn-line: rgba(224, 162, 60, 0.32);
   --danger: #E5484D;
+  --danger-text: #FF6B70;
   --danger-quiet: rgba(229, 72, 77, 0.10);
+  --danger-line: rgba(229, 72, 77, 0.34);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Type scale, 1.25 ratio, capped — an ops tool has no use for hero type past 30px. */
   --text-xs: 11px;
@@ -44,33 +79,59 @@
   --space-6: 32px;
   --space-7: 48px;
 
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
+  /* Small radii: a surface should read as a plane with a cut corner, not as a pill. */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
 
-  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
+  /*
+   * One frame for the whole app. The nav bar and every page hang off the same left edge,
+   * so moving between screens never slides the column out from under the pointer. Pages
+   * that want a narrower measure constrain their content inside the frame rather than
+   * shrinking the frame itself.
+   */
+  --shell: 1040px;
+  --gutter: var(--space-5);
 
   /* Fast enough to feel like feedback, not animation. */
   --motion: 120ms cubic-bezier(0.2, 0, 0.2, 1);
+
+  /*
+   * Button skins live in variables so a :hover rule can change them. An inline style can
+   * set `background: var(--btn-bg-secondary)`; only the cascade can decide what that
+   * variable resolves to while the pointer is down on it.
+   */
+  --btn-bg-primary: var(--accent);
+  --btn-bg-secondary: var(--raised);
+  --btn-bg-ghost: transparent;
+  --btn-fg-ghost: var(--muted);
+  --btn-border: var(--border-strong);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 
+html {
+  /* Thin, recessive scrollbars: the chrome should not outweigh the rows it scrolls. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
 html, body {
   background: var(--canvas);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: 1.5;
-  /* Dark text on dark surfaces renders heavy without this. */
+  /* Light text on dark surfaces renders heavy without this. */
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.2; margin: 0; }
+/* 600, not the UA's 700: at these sizes bold reads as shouting rather than as hierarchy. */
+h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.25; margin: 0; font-weight: 600; }
 p { margin: 0; }
 
 .mono {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
@@ -78,24 +139,94 @@ p { margin: 0; }
 /* Numbers that get compared down a column must not jitter. */
 .tabular { font-variant-numeric: tabular-nums; }
 
-a { color: var(--accent); text-decoration: none; }
+a { color: var(--accent-text); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
 
 /*
- * Keyboard focus is visible everywhere, and never removed. Inline styles cannot express
- * :focus-visible, which is exactly why this lives here.
+ * Keyboard focus is visible everywhere, and never removed. The ring uses the lifted
+ * accent so it clears 3:1 against every surface in the app, including --raised.
  */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
 }
 button, select, input, textarea { font: inherit; color: inherit; }
 button:not(:disabled) { cursor: pointer; }
 
+/*
+ * Every control built from buttonStyle() reads these, so one rule gives the whole app its
+ * hover state. .cf-btn carries it to the anchors that are styled as buttons.
+ */
+button:hover:not(:disabled),
+.cf-btn:hover {
+  --btn-bg-primary: var(--accent-hover);
+  --btn-bg-secondary: var(--raised-hover);
+  --btn-bg-ghost: var(--raised);
+  --btn-fg-ghost: var(--text);
+  --btn-border: var(--border-loud);
+}
+
 ::placeholder { color: var(--faint); }
 
 ::selection { background: var(--accent-quiet); }
+
+/* The app bar stays put over a long queue, and lets the canvas through behind it. */
+.cf-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--border);
+}
+@supports (backdrop-filter: blur(2px)) {
+  .cf-nav {
+    background: rgba(10, 10, 11, 0.72);
+    backdrop-filter: blur(14px) saturate(150%);
+  }
+}
+
+/*
+ * Destination state is carried by weight and a filled pill as well as by colour, so it
+ * survives a monochrome screen. aria-current is the selector because it is also the thing
+ * a screen reader announces — the two cannot drift apart.
+ */
+.cf-nav-link {
+  display: block;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  white-space: nowrap;
+  transition: background var(--motion), color var(--motion);
+}
+.cf-nav-link:hover { background: var(--surface-hover); color: var(--text); }
+.cf-nav-link[aria-current="page"] {
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* A queue row is one big hit target; the arrow only confirms where the click will land. */
+.cf-row { transition: background var(--motion); }
+.cf-row:hover { background: var(--surface-hover); }
+.cf-row:hover .cf-row-go { opacity: 1; transform: translateX(2px); }
+
+/* Present to the keyboard, out of the way of everyone else, until it is focused. */
+.skip-link {
+  position: absolute;
+  left: var(--gutter);
+  top: var(--space-2);
+  z-index: 40;
+  transform: translateY(-300%);
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--border-loud);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: transform var(--motion);
+}
+.skip-link:focus-visible { transform: translateY(0); }
 
 /* Respect the setting; nothing here is load-bearing animation. */
 @media (prefers-reduced-motion: reduce) {

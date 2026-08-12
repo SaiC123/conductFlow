@@ -3,7 +3,9 @@ import { getCurrentOrgId } from "@/lib/db/queries";
 import { getServerClient } from "@/lib/db/server";
 import { CAPABILITIES, type Capability } from "@/lib/google/scopes";
 import { ConnectionList } from "@/components/settings/ConnectionList";
-import { PageHeader, Card, CardTitle, EmptyState, buttonStyle } from "@/components/ui/primitives";
+import {
+  PageHeader, Card, CardTitle, EmptyState, SectionHeading, buttonStyle, pageStyle,
+} from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -12,21 +14,21 @@ export interface ConnectionRow {
   state: string; created_at: string;
 }
 
-const shell: React.CSSProperties = {
-  maxWidth: 760, margin: "0 auto", padding: "var(--space-6) var(--space-5)",
-};
+/** Wider than a form, narrower than the queue: these are cards you read one at a time. */
+const column: React.CSSProperties = { maxWidth: 720 };
 
 export default async function SettingsPage({ searchParams }:
   { searchParams: Promise<{ error?: string; connected?: string }> }) {
   const { error, connected } = await searchParams;
   const orgId = await getCurrentOrgId();
   if (!orgId) return (
-    <main style={shell}>
+    <main style={pageStyle}>
       <PageHeader title="Settings" />
       <EmptyState
         title="Sign in to manage connections"
         body="Google access is granted one capability at a time, and can be revoked here."
-        action={<Link href="/onboarding" style={buttonStyle("primary")}>Sign in</Link>}
+        action={<Link href="/onboarding" className="cf-btn"
+          style={buttonStyle("primary")}>Sign in</Link>}
       />
     </main>);
 
@@ -45,7 +47,8 @@ export default async function SettingsPage({ searchParams }:
   }));
 
   return (
-    <main style={shell}>
+    <main style={pageStyle}>
+      <div style={column}>
       <PageHeader
         title="Settings"
         lede="Connect Google one capability at a time. Each asks for the narrowest access that does the job, and you can revoke any of them here."
@@ -70,17 +73,12 @@ export default async function SettingsPage({ searchParams }:
         </Card>
       )}
 
-      <h2 style={{ fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "0.08em",
-        textTransform: "uppercase", color: "var(--muted)", marginBottom: "var(--space-3)" }}>
-        Google capabilities
-      </h2>
+      <SectionHeading>Google capabilities</SectionHeading>
       <ConnectionList capabilities={capabilities} connections={rows} />
 
-      <h2 style={{ fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "0.08em",
-        textTransform: "uppercase", color: "var(--muted)",
-        margin: "var(--space-6) 0 var(--space-3)" }}>
-        Permissions
-      </h2>
+      <div style={{ marginTop: "var(--space-7)" }}>
+        <SectionHeading>Permissions</SectionHeading>
+      </div>
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between",
           alignItems: "flex-start", gap: "var(--space-4)", flexWrap: "wrap" }}>
@@ -91,11 +89,12 @@ export default async function SettingsPage({ searchParams }:
               first, and the things it can never do at any setting.
             </p>
           </div>
-          <Link href="/settings/blueprint" style={buttonStyle("secondary")}>
+          <Link href="/settings/blueprint" className="cf-btn" style={buttonStyle("secondary")}>
             Review the blueprint
           </Link>
         </div>
       </Card>
+      </div>
     </main>
   );
 }

@@ -91,7 +91,7 @@ export function ApprovalBar({ commitmentId }: { commitmentId: string }) {
 
       {error && (
         <p role="alert" style={{ marginTop: "var(--space-3)",
-          color: partial ? "var(--warn)" : "var(--danger)" }}>
+          color: partial ? "var(--warn)" : "var(--danger-text)" }}>
           {partial ? (
             <>
               The task was created, but the Gmail draft was not written.{" "}

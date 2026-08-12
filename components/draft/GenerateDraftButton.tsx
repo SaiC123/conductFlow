@@ -39,7 +39,7 @@ export function GenerateDraftButton({ commitmentId, hasDraft }:
         </span>
       </div>
       {error && (
-        <p role="alert" style={{ color: "var(--danger)", marginTop: "var(--space-2)" }}>
+        <p role="alert" style={{ color: "var(--danger-text)", marginTop: "var(--space-2)" }}>
           The draft could not be written.{" "}
           <span className="mono" style={{ color: "var(--muted)" }}>{error}</span>
         </p>

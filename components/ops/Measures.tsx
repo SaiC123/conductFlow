@@ -28,9 +28,11 @@ export function MeasureRow({ label, count, max, value, tone = "accent" }: {
           {value}
         </span>
       </div>
-      <div aria-hidden style={{ height: 6, borderRadius: 3, marginTop: "var(--space-2)",
-        background: `var(--${tone}-quiet)`, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${share * 100}%`, borderRadius: 3,
+      {/* Neutral track, coloured fill: a tinted track spends the tone on the part of the
+          bar that carries no reading, and dulls the boundary the eye actually measures. */}
+      <div aria-hidden style={{ height: 4, borderRadius: 2, marginTop: "var(--space-2)",
+        background: "var(--raised)", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${share * 100}%`, borderRadius: 2,
           background: `var(--${tone})` }} />
       </div>
     </div>
@@ -53,31 +55,17 @@ export function Meter({ pct, tone, filledLabel, emptyLabel }: {
   const clamped = Math.max(0, Math.min(100, pct));
   return (
     <div>
-      <div style={{ height: 8, borderRadius: 4, background: `var(--${tone}-quiet)`,
+      <div style={{ height: 6, borderRadius: 3, background: "var(--raised)",
         overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${clamped}%`, borderRadius: 4,
+        <div style={{ height: "100%", width: `${clamped}%`, borderRadius: 3,
           background: `var(--${tone})` }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between",
-        gap: "var(--space-4)", marginTop: "var(--space-2)",
+        gap: "var(--space-4)", marginTop: "var(--space-3)",
         fontSize: "var(--text-sm)", color: "var(--muted)" }}>
         <span>{filledLabel}</span>
         <span>{emptyLabel}</span>
       </div>
-    </div>
-  );
-}
-
-/** A section heading that matches the uppercase eyebrow the rest of the app uses. */
-export function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline",
-      gap: "var(--space-4)", marginBottom: "var(--space-2)" }}>
-      <h2 style={{ fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "0.08em",
-        textTransform: "uppercase", color: "var(--muted)" }}>
-        {children}
-      </h2>
-      {note && <span style={{ color: "var(--faint)", fontSize: "var(--text-sm)" }}>{note}</span>}
     </div>
   );
 }

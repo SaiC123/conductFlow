@@ -82,7 +82,7 @@ export function RecurringSuggestions({ patterns }: { patterns: RecurringPattern[
       </ul>
 
       {error && (
-        <p role="alert" style={{ color: "var(--danger)", marginTop: "var(--space-3)" }}>
+        <p role="alert" style={{ color: "var(--danger-text)", marginTop: "var(--space-3)" }}>
           {error}
         </p>
       )}

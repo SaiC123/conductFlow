@@ -6,23 +6,20 @@ import { detectRecurring } from "@/lib/ops/recurring";
 import { RecurringSuggestions } from "@/components/tasks/RecurringSuggestions";
 import { TaskBoard } from "@/components/tasks/TaskBoard";
 import { ReminderStrip } from "@/components/tasks/ReminderStrip";
-import { PageHeader, EmptyState, buttonStyle } from "@/components/ui/primitives";
+import { PageHeader, EmptyState, buttonStyle, pageStyle } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
-
-const shell: React.CSSProperties = {
-  maxWidth: 1040, margin: "0 auto", padding: "var(--space-6) var(--space-5)",
-};
 
 export default async function TasksPage() {
   const orgId = await getCurrentOrgId();
   if (!orgId) return (
-    <main style={shell}>
+    <main style={pageStyle}>
       <PageHeader title="Task board" />
       <EmptyState
         title="Sign in to see your board"
         body="Every commitment you approve lands here, with whatever has slipped past its date at the top."
-        action={<Link href="/onboarding" style={buttonStyle("primary")}>Sign in</Link>}
+        action={<Link href="/onboarding" className="cf-btn"
+          style={buttonStyle("primary")}>Sign in</Link>}
       />
     </main>);
 
@@ -45,18 +42,14 @@ export default async function TasksPage() {
   const live = tasks.filter((t) => t.status !== "done").length;
 
   return (
-    <main style={shell}>
+    <main style={pageStyle}>
       <PageHeader
         title="Task board"
         lede="Every approved commitment lands here. Moving a card to delivered closes the promise it came from."
+        meta={tasks.length > 0
+          ? `${live} open · ${late} late · ${tasks.length - live} delivered`
+          : undefined}
       />
-
-      {tasks.length > 0 && (
-        <p className="mono" style={{ color: "var(--faint)", fontSize: "var(--text-xs)",
-          marginBottom: "var(--space-3)" }}>
-          {live} open · {late} late · {tasks.length - live} delivered
-        </p>
-      )}
 
       {/*
         Order of the screen, deliberately:
@@ -74,7 +67,8 @@ export default async function TasksPage() {
         <EmptyState
           title="Nothing on the board yet"
           body="Approve a commitment in the queue and it becomes a task here, with its client, owner, and date attached."
-          action={<Link href="/queue" style={buttonStyle("primary")}>Go to the queue</Link>}
+          action={<Link href="/queue" className="cf-btn"
+            style={buttonStyle("primary")}>Go to the queue</Link>}
         />
       ) : (
         <TaskBoard items={tasks} nowIso={now.toISOString()} />

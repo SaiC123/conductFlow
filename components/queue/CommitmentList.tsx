@@ -39,20 +39,16 @@ export function CommitmentList({ items }: { items: Commitment[] }) {
       <EmptyState
         title="No promises yet"
         body="Paste or upload a client conversation and ConductFlow pulls out what was promised, who owes it, and when."
-        action={<Link href="/ingest" style={buttonStyle("primary")}>Add a transcript</Link>}
+        action={<Link href="/ingest" className="cf-btn"
+          style={buttonStyle("primary")}>Add a transcript</Link>}
       />
     );
   }
 
   return (
     <>
-      {/* Inline styles cannot express :hover; React 19 hoists this and dedupes it by href. */}
-      <style href="cf-queue-row" precedence="medium">{`
-        .cf-row { transition: background var(--motion), border-color var(--motion); }
-        .cf-row:hover { background: var(--raised); }
-        .cf-row:hover .cf-row-go { opacity: 1; transform: translateX(2px); }
-      `}</style>
-
+      {/* .cf-row's hover lives in globals.css with every other state a style object
+          cannot express. */}
       <ul style={{ listStyle: "none", padding: 0, margin: 0,
         border: "1px solid var(--border)", borderRadius: "var(--radius)",
         overflow: "hidden", background: "var(--surface)" }}>
@@ -65,16 +61,16 @@ export function CommitmentList({ items }: { items: Commitment[] }) {
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 gap: "var(--space-4)", color: "var(--text)",
                 padding: "var(--space-3) var(--space-4)",
-                borderLeft: `3px solid ${RAIL[risk]}`,
+                borderLeft: `2px solid ${RAIL[risk]}`,
               }}>
                 <span style={{ minWidth: 0 }}>
-                  <span style={{ fontSize: "var(--text-md)", fontWeight: 500,
+                  <span style={{ fontSize: "var(--text-base)", fontWeight: 500,
                     display: "block", overflow: "hidden", textOverflow: "ellipsis",
                     whiteSpace: "nowrap" }}>
                     {c.text}
                   </span>
                   <span className="mono" style={{ display: "block", color: "var(--faint)",
-                    fontSize: "var(--text-xs)", marginTop: "var(--space-1)" }}>
+                    fontSize: "var(--text-xs)", marginTop: 3 }}>
                     {due ?? "no date"} · {c.owner ?? "no owner"}
                   </span>
                 </span>

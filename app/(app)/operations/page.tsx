@@ -5,16 +5,13 @@ import {
 } from "@/lib/ops/map";
 import { StatTile } from "@/components/ui/StatTile";
 import { WeeklyVolume } from "@/components/ops/WeeklyVolume";
-import { MeasureRow, Meter, SectionTitle } from "@/components/ops/Measures";
+import { MeasureRow, Meter } from "@/components/ops/Measures";
 import {
-  PageHeader, Card, CardTitle, Badge, EmptyState, buttonStyle, proseStyle,
+  PageHeader, Card, CardTitle, Badge, EmptyState, SectionHeading, buttonStyle, pageStyle,
+  proseStyle, statGridStyle,
 } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
-
-const shell: React.CSSProperties = {
-  maxWidth: 900, margin: "0 auto", padding: "var(--space-6) var(--space-5)",
-};
 
 /** Always with its sample size: a median of three deadlines is not a practice. */
 function leadTimeText(lead: LeadTime | null): string {
@@ -28,24 +25,24 @@ function leadTimeText(lead: LeadTime | null): string {
 export default async function OperationsPage() {
   const orgId = await getCurrentOrgId();
   if (!orgId) return (
-    <main style={shell}>
+    <main style={pageStyle}>
       <PageHeader title="Operations map" />
       <EmptyState
         title="Sign in to see how your team works"
         body="After enough conversations, this describes what your business actually promises, who owes it, and whether it lands."
-        action={<Link href="/onboarding" style={buttonStyle("primary")}>Sign in</Link>}
+        action={<Link href="/onboarding" className="cf-btn" style={buttonStyle("primary")}>Sign in</Link>}
       />
     </main>);
 
   const map = buildOperationsMap(await loadOperationsData(orgId), new Date());
 
   if (map.totalCommitments === 0) return (
-    <main style={shell}>
+    <main style={pageStyle}>
       <PageHeader title="Operations map" />
       <EmptyState
         title="Nothing observed yet"
         body="This map is built from the promises in your conversations. Add the first transcript and it starts learning how your team works."
-        action={<Link href="/ingest" style={buttonStyle("primary")}>Add a transcript</Link>}
+        action={<Link href="/ingest" className="cf-btn" style={buttonStyle("primary")}>Add a transcript</Link>}
       />
     </main>);
 
@@ -66,7 +63,7 @@ export default async function OperationsPage() {
   const maxClientLoad = Math.max(1, ...map.clients.map((c) => c.openCommitments));
 
   return (
-    <main style={shell}>
+    <main style={pageStyle}>
       <PageHeader
         title="Operations map"
         lede={`What your conversations actually promise, drawn from ${map.totalCommitments} commitment${map.totalCommitments === 1 ? "" : "s"}${map.observed ? ` over ${map.observed.days} day${map.observed.days === 1 ? "" : "s"}` : ""}.`}
@@ -92,7 +89,7 @@ export default async function OperationsPage() {
         </Card>
       )}
 
-      <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
+      <div style={statGridStyle}>
         <StatTile
           label="Promises tracked"
           value={String(map.totalCommitments)}
@@ -122,8 +119,8 @@ export default async function OperationsPage() {
       </div>
 
       {map.weeks.length > 0 && (
-        <section style={{ marginTop: "var(--space-6)" }}>
-          <SectionTitle note={provisional}>Volume per week</SectionTitle>
+        <section style={{ marginTop: "var(--space-7)" }}>
+          <SectionHeading note={provisional}>Volume per week</SectionHeading>
           <Card>
             <WeeklyVolume
               weeks={map.weeks}
@@ -134,8 +131,8 @@ export default async function OperationsPage() {
         </section>
       )}
 
-      <section style={{ marginTop: "var(--space-6)" }}>
-        <SectionTitle note={provisional}>What we promise</SectionTitle>
+      <section style={{ marginTop: "var(--space-7)" }}>
+        <SectionHeading note={provisional}>What we promise</SectionHeading>
         <Card>
           {map.types.map((t) => (
             <MeasureRow
@@ -156,8 +153,8 @@ export default async function OperationsPage() {
         </Card>
       </section>
 
-      <section style={{ marginTop: "var(--space-6)" }}>
-        <SectionTitle note={provisional}>Who owes the work</SectionTitle>
+      <section style={{ marginTop: "var(--space-7)" }}>
+        <SectionHeading note={provisional}>Who owes the work</SectionHeading>
         <Card>
           {map.owners.map((o) => (
             <MeasureRow key={o.owner} label={o.owner} count={o.count} max={maxOwnerCount}
@@ -176,8 +173,8 @@ export default async function OperationsPage() {
         </Card>
       </section>
 
-      <section style={{ marginTop: "var(--space-6)" }}>
-        <SectionTitle note={provisional}>Delivery</SectionTitle>
+      <section style={{ marginTop: "var(--space-7)" }}>
+        <SectionHeading note={provisional}>Delivery</SectionHeading>
         <Card>
           <dl style={{ margin: 0, display: "grid", gap: "var(--space-3)" }}>
             <Fact
@@ -210,8 +207,8 @@ export default async function OperationsPage() {
       </section>
 
       {map.clients.length > 0 && (
-        <section style={{ marginTop: "var(--space-6)" }}>
-          <SectionTitle note={provisional}>Who is waiting on us</SectionTitle>
+        <section style={{ marginTop: "var(--space-7)" }}>
+          <SectionHeading note={provisional}>Who is waiting on us</SectionHeading>
           <Card>
             {map.clients.map((c) => (
               <MeasureRow key={c.clientId} label={c.clientName} count={c.openCommitments}

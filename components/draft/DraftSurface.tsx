@@ -11,16 +11,15 @@ export function DraftSurface({ draft, provenance }:
     <section style={{
       background: "var(--surface)",
       border: "1px solid var(--border)",
-      borderLeft: "3px solid var(--accent)",
+      borderLeft: "2px solid var(--accent)",
       borderRadius: "var(--radius)",
-      marginTop: "var(--space-4)",
     }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
         gap: "var(--space-3)", flexWrap: "wrap",
         padding: "var(--space-3) var(--space-4)",
         borderBottom: "1px solid var(--border)" }}>
-        <span style={{ color: "var(--accent)", fontWeight: 600,
-          fontSize: "var(--text-sm)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+        <span className="mono" style={{ color: "var(--accent-text)", fontWeight: 600,
+          fontSize: "var(--text-xs)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Drafted by ConductFlow
         </span>
         <Badge tone="neutral" title="ConductFlow has no ability to send mail at all">
@@ -33,7 +32,7 @@ export function DraftSurface({ draft, provenance }:
           <>
             {draft.subject && (
               <div style={{ fontSize: "var(--text-md)", fontWeight: 600,
-                marginBottom: "var(--space-3)" }}>
+                letterSpacing: "-0.01em", marginBottom: "var(--space-3)" }}>
                 {draft.subject}
               </div>
             )}

@@ -2,7 +2,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startConnect, disconnectGoogle } from "@/app/actions/connect";
-import { Card, CardTitle, Badge, buttonStyle } from "@/components/ui/primitives";
+import { Card, CardTitle, Badge, SectionHeading, buttonStyle } from "@/components/ui/primitives";
 
 interface CapabilityRow {
   key: string; label: string; detail: string;
@@ -55,7 +55,7 @@ export function ConnectionList({ capabilities, connections }:
           return (
             <li key={c.key}>
               <Card style={{ borderLeft: c.connected
-                ? "3px solid var(--ok)" : "3px solid var(--border-strong)" }}>
+                ? "2px solid var(--ok)" : "2px solid var(--border-strong)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between",
                   alignItems: "flex-start", gap: "var(--space-4)", flexWrap: "wrap" }}>
                   <div style={{ minWidth: 0 }}>
@@ -103,12 +103,9 @@ export function ConnectionList({ capabilities, connections }:
       </ul>
 
       {connections.length > 0 && (
-        <section style={{ marginTop: "var(--space-6)" }}>
-          <h2 style={{ fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "0.08em",
-            textTransform: "uppercase", color: "var(--muted)" }}>
-            Connected accounts
-          </h2>
-          <ul style={{ listStyle: "none", padding: 0, margin: "var(--space-3) 0 0" }}>
+        <section style={{ marginTop: "var(--space-7)" }}>
+          <SectionHeading>Connected accounts</SectionHeading>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {connections.map((r) => {
               const busy = isPending && busyKey === r.id;
               return (
@@ -150,7 +147,7 @@ export function ConnectionList({ capabilities, connections }:
       )}
 
       {error && (
-        <p role="alert" style={{ color: "var(--danger)", marginTop: "var(--space-4)" }}>
+        <p role="alert" style={{ color: "var(--danger-text)", marginTop: "var(--space-4)" }}>
           That did not work.{" "}
           <span className="mono" style={{ color: "var(--muted)" }}>{error}</span>
         </p>
