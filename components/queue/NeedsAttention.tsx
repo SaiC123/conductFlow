@@ -42,7 +42,11 @@ export function NeedsAttention({ items }: { items: FailedTranscript[] }) {
                   setError(null);
                   setRetrying(t.id);
                   startTransition(async () => {
-                    try { await retryExtraction(t.id); router.refresh(); }
+                    try {
+                      const refused = await retryExtraction(t.id);
+                      if (refused?.error) setError(refused.error);
+                      else router.refresh();
+                    }
                     catch (e) { setError(e instanceof Error ? e.message : "Retry failed."); }
                   });
                 }}
