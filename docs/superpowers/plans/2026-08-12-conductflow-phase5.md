@@ -1052,11 +1052,25 @@ describe("saveBlueprint", () => {
     expect(after.expires_in_minutes).toBe(45);
   });
 
+  // CORRECTED after implementation. The obvious fixture — spreading DEFAULT_BLUEPRINT and
+  // appending push_email_draft to permitted_actions — puts the action in BOTH arrays,
+  // because DEFAULT_BLUEPRINT.required_approvals already lists it. validateBlueprintEdit
+  // checks both-arrays before it checks ALWAYS_NEEDS_APPROVAL, so that fixture never
+  // reaches the branch it claims to test. Two cases, not one.
   it("refuses an edit that grants an always-approval action unattended", async () => {
     await expect(saveBlueprint(db, orgB, {
       ...DEFAULT_BLUEPRINT,
       permitted_actions: [...DEFAULT_BLUEPRINT.permitted_actions, "push_email_draft"],
+      required_approvals: DEFAULT_BLUEPRINT.required_approvals
+        .filter((a) => a !== "push_email_draft"),
     }, ownerB)).rejects.toThrow(/always needs approval/i);
+  });
+
+  it("refuses an edit naming an action as both unattended and approval-gated", async () => {
+    await expect(saveBlueprint(db, orgB, {
+      ...DEFAULT_BLUEPRINT,
+      permitted_actions: [...DEFAULT_BLUEPRINT.permitted_actions, "push_email_draft"],
+    }, ownerB)).rejects.toThrow(/cannot be both unattended and approval-gated/i);
   });
 
   it("refuses a hard-prohibited action", async () => {

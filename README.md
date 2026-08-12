@@ -1,4 +1,4 @@
-# ConductFlow (Phases 1–3)
+# ConductFlow (Phases 1–5)
 
 ConductFlow turns conversations from small client-service businesses into approved
 tasks and follow-up drafts — nothing sends without you.
@@ -25,6 +25,22 @@ one capability at a time. Refresh tokens are sealed with envelope encryption and
 a table `authenticated` cannot read. Approving a commitment writes the follow-up into the
 connected account's **Gmail drafts** — never sends it.
 
+Phase 4 turns the loop into something an owner can steer. `/operations` maps how the business
+actually runs — lead times, promise types, owners, delivery, client load — once there are twenty
+commitments to reason about. `/settings/blueprint` is where an owner decides, per action, whether
+the agent may act unattended, must ask first, or is switched off; every edit writes a new version
+rather than overwriting the old one, so "what was this agent allowed to do when it did that?" stays
+answerable. Conversations that mention a complaint or a legal concern, or that produce a promise
+nobody owns, raise an escalation on `/queue`. Repeating promises become proposals on `/tasks`, and
+exception checks flag a conversation that does not look like how this business normally works.
+
+Phase 5 makes the blueprint real. It was advisory: a non-owner could rewrite it through PostgREST,
+two action paths ignored it and used the shipped defaults, and a failed read silently substituted a
+broader contract. Now writing a blueprint is an owner's privilege enforced by row-level security,
+not by an application check; actions that reach someone outside the team are demoted to
+approval-gated when the stored row is read, so a forged row grants nothing; every action resolves
+the org's own contract; and a contract that cannot be read denies the action instead of widening it.
+
 **Nothing sends, and that is enforced in code, not by scope.** No Google scope permits
 creating a draft without also permitting send: `gmail.compose` authorizes `drafts.send`. So
 `send_external_email` sits in the contract's `prohibitedActions` — denied even with
@@ -50,10 +66,11 @@ if the word `send` appears in that module. Verify with
    it expires every 12 hours. `npm test` does not need either; tests inject a mock model.
 3. `npx supabase start` then `npm run db:reset` (applies migrations `0001`–`0003` + seed).
 4. `npm run dev` → http://localhost:3000
-5. Open `/onboarding` and use **Continue as demo owner**. Google OAuth arrives in
-   Phase 3; until then this dev-only button mints a session for the seeded
-   `owner@demo.test` through the admin API. There is no password field, and the
-   button is not rendered when `NODE_ENV=production`.
+5. Open `/onboarding`. Google OAuth sign-in shipped in Phase 3A and works once the
+   credentials in **Google setup** below are in place. **Continue as demo owner** is the
+   local shortcut: a dev-only button that mints a session for the seeded `owner@demo.test`
+   through the admin API. There is no password field, and it renders only when
+   `NODE_ENV` is not `production` *and* the Supabase URL is loopback.
 
 ### Screens
 
@@ -66,7 +83,9 @@ if the word `send` appears in that module. Verify with
 | `/queue/[commitmentId]` | Draft review: draft surface, provenance, flagged-source banner, write/rewrite draft, approval bar |
 | `/tasks` | Task board: open / in progress / delivered, plus the overdue reminder strip |
 | `/dashboard` | Promise risk: overdue, owner+deadline coverage, approved share |
+| `/operations` | Operations map: lead times, promise types, owners, delivery, client load, weekly volume — needs 20 commitments |
 | `/settings` | Google connections — connect or revoke one capability at a time |
+| `/settings/blueprint` | The agent blueprint: per-action unattended / ask-first / off. Owner-only, append-only versions |
 
 Approving writes an `approval_event`, a `task`, and an `audit_event`, and flips the
 commitment to `tasked`. Discarding writes a `rejected` approval event plus its audit row.
@@ -115,17 +134,27 @@ Rules that hold across every screen:
 
 ## Test
 
-`npm test` — 201 tests, no API key, no network, and no Google credentials required. Google
-clients are injected, so Drive, Calendar, and Gmail are tested against fakes. `tests/rls.test.ts`,
-`tests/ingest/run.test.ts`, `tests/reminders/sweep.test.ts`, and `tests/tasks/update.test.ts`
-talk to the running local stack, so `supabase start` and `npm run db:reset` must have
-succeeded first. The suite covers cross-org denial, anonymous denial, audit append-only
-enforcement, the deny-by-default chokepoint, injection flagging, schema validation, span
-verification, deadline resolution, the extraction retry, transcript parsing, the ingest
-write sequence, task transitions, the idempotent overdue sweep, and metrics.
+`npm test` — 361 tests across 37 files, no API key, no network, and no Google credentials
+required. Google clients are injected, so Drive, Calendar, and Gmail are tested against fakes.
+`tests/rls.test.ts`, `tests/ingest/*`, `tests/drafts/*`, `tests/reminders/sweep.test.ts`,
+`tests/tasks/update.test.ts`, and `tests/agent/blueprint-store.test.ts` talk to the running local
+stack, so `supabase start` and `npm run db:reset` must have succeeded first. The suite covers
+cross-org denial, anonymous denial, audit append-only enforcement, the deny-by-default
+chokepoint, injection flagging, schema validation, span verification, deadline resolution, the
+extraction retry, transcript parsing, the ingest write sequence, task transitions, the idempotent
+overdue sweep, and metrics.
+
+Phase 5 adds the enforcement tests: a seeded member is refused an `agent_blueprint` insert
+(`42501`), an owner is refused one granting an unattended external action (`23514`), a forged row
+granting `push_email_draft` unattended still resolves to an approval-gated contract, a blueprint
+that cannot be read denies rather than widening, and two source assertions — one failing if the
+SQL action lists drift from `lib/agent/blueprint.ts`, one failing if `firstAgentContract` is
+imported anywhere under `app/` or `lib/` outside `lib/agent/contract.ts`.
 
 Those stack-backed tests write rows and never delete them — nothing in this product may
-delete a task. Run `npm run db:reset` when the local board gets noisy with fixtures.
+delete a task. They claim the next free blueprint version rather than a literal one, so the
+suite can run twice without a reset. Run `npm run db:reset` when the local board gets noisy
+with fixtures.
 
 ## Eval
 
@@ -184,11 +213,22 @@ sign-in button, and an org that has connected nothing simply gets plainer drafts
 - **`GatewayRateLimitError`.** Free-tier throttling, not a bug. Space the calls out
   (`EVAL_PACE_MS`) or top up. Ingest retries twice and then leaves the transcript in
   **Needs attention**, so nothing is lost.
+- **`new row violates check constraint "agent_blueprint_no_unattended_external"`.** The
+  blueprint tried to grant `push_email_draft` or `edit_crm` unattended. Those reach someone
+  outside the team and always need a human click — set them to **ask first** instead. The
+  editor refuses this before the database does; seeing the constraint name means something
+  wrote the row directly.
+- **`42501` inserting an `agent_blueprint` row.** Only an owner may change the blueprint.
+  Members read it and see the editor read-only.
+- **"Couldn't confirm what the agent is allowed to do."** The org's blueprint could not be
+  read, so the action was denied rather than run under a guessed contract. The denial is in
+  `audit_event` with a `:contract_unavailable` target. Check the database connection and retry;
+  nothing was written.
 
 ## Deploy
 
 Vercel project + env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY`, `AI_GATEWAY_API_KEY`, `CRON_SECRET`); Supabase hosted project
-with migrations `0001`–`0004` applied (`npx supabase db push`). `SUPABASE_SERVICE_ROLE_KEY` is server-only — it is
+with migrations `0001`–`0011` applied (`npx supabase db push`). `SUPABASE_SERVICE_ROLE_KEY` is server-only — it is
 never imported into a client component. The hosted database has no seed data, so
 `/ingest` starts with no clients there — use **Add a new client**.
