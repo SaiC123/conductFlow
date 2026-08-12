@@ -5,6 +5,7 @@ import { generateFollowUpDraft } from "@/lib/agent/draft";
 import { canExecute } from "@/lib/agent/execute-policy";
 import { firstAgentContract } from "@/lib/agent/contract";
 import { logAudit } from "@/lib/audit/log";
+import { contextForOrg } from "@/lib/google/draft-context";
 
 export interface IngestArgs {
   orgId: string; clientId: string; clientName: string;
@@ -119,9 +120,17 @@ async function finishIngest(
   }).eq("id", ctx.transcriptId);
   if (transcriptUpdateError) throw transcriptUpdateError;
 
+  // Fetched once for the whole transcript, not per commitment: the template and the day's
+  // meetings are the same for every promise made in one conversation. Empty for an org
+  // that has connected nothing, which is every org until someone visits Settings.
+  const context = await contextForOrg(db, {
+    orgId: ctx.orgId, clientName: ctx.clientName, occurredAt: ctx.occurredAt,
+  });
+
   // A draft failing is not an ingest failing — that commitment keeps the empty-draft state.
   const drafts = await Promise.allSettled(pairs.map(async ({ id, commitment: c }) => {
     const draft = await generateFollowUpDraft({
+      templateText: context.templateText, meetingContext: context.meetingContext,
       commitmentText: c.text, clientName: ctx.clientName,
       deadline: c.deadline, sourceSpan: c.source_span,
     }, model);

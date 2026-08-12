@@ -7,10 +7,15 @@ describe("canExecute (deny-by-default)", () => {
     expect(canExecute("change_pricing", true, firstAgentContract).ok).toBe(false);
   });
   it("denies an approval-required action without approval", () => {
-    expect(canExecute("send_external_email", false, firstAgentContract).ok).toBe(false);
+    expect(canExecute("push_email_draft", false, firstAgentContract).ok).toBe(false);
   });
   it("allows an approval-required action once approved", () => {
-    expect(canExecute("send_external_email", true, firstAgentContract).ok).toBe(true);
+    expect(canExecute("push_email_draft", true, firstAgentContract).ok).toBe(true);
+  });
+  it("denies sending even with approval — nothing may send, at any approval level", () => {
+    const decision = canExecute("send_external_email", true, firstAgentContract);
+    expect(decision.ok).toBe(false);
+    expect(decision.reason).toBe("prohibited");
   });
   it("allows a permitted internal action", () => {
     expect(canExecute("draft_recap", false, firstAgentContract).ok).toBe(true);

@@ -28,16 +28,19 @@ function resolveKey(key?: Buffer): Buffer {
   return decoded;
 }
 
-export function encryptToken(plaintext: string, key?: Buffer): string {
+export function encryptToken(plaintext: string, key?: Buffer, aad?: string): string {
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv("aes-256-gcm", resolveKey(key), iv);
+  // AAD binds a ciphertext to its row. Moved to another org, it fails its tag rather
+  // than decrypting into a usable token.
+  if (aad !== undefined) cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   return [VERSION, iv, cipher.getAuthTag(), ciphertext]
     .map((part) => (typeof part === "string" ? part : part.toString("base64url")))
     .join(SEPARATOR);
 }
 
-export function decryptToken(ciphertext: string, key?: Buffer): string {
+export function decryptToken(ciphertext: string, key?: Buffer, aad?: string): string {
   const resolved = resolveKey(key);
   const parts = ciphertext.split(SEPARATOR);
   if (parts.length !== 4) throw new Error("Encrypted token is malformed.");
@@ -53,6 +56,7 @@ export function decryptToken(ciphertext: string, key?: Buffer): string {
   try {
     const decipher = createDecipheriv("aes-256-gcm", resolved, iv);
     decipher.setAuthTag(tag);
+    if (aad !== undefined) decipher.setAAD(Buffer.from(aad, "utf8"));
     return Buffer.concat([
       decipher.update(Buffer.from(bodyPart, "base64url")),
       decipher.final(),

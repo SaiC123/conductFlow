@@ -3,16 +3,27 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { approveAndCreateTask, rejectCommitment } from "@/app/actions/approvals";
 
+// Not having Google connected is the normal case, not a failure worth interrupting for.
+const SILENT_REASONS = new Set(["missing", "revoked", "no draft to push"]);
+
 export function ApprovalBar({ commitmentId }: { commitmentId: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function run(action: (id: string) => Promise<void>) {
+  function run(action: (id: string) => Promise<{ pushed: boolean; reason?: string } | void>) {
     setError(null);
     startTransition(async () => {
       try {
-        await action(commitmentId);
+        const result = await action(commitmentId);
+        // Approving also places the draft in Gmail. A push that did not happen for any
+        // reason other than "no account connected" keeps the user here to see why —
+        // silently landing back on the queue would imply it worked.
+        if (result && !result.pushed && result.reason && !SILENT_REASONS.has(result.reason)) {
+          setError(`Approved and task created, but the Gmail draft was not written: ${result.reason}`);
+          router.refresh();
+          return;
+        }
         router.push("/queue");
         router.refresh();
       } catch (e) {

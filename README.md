@@ -1,4 +1,4 @@
-# ConductFlow (Phase 2 + 3B)
+# ConductFlow (Phases 1–3)
 
 ConductFlow turns conversations from small client-service businesses into approved
 tasks and follow-up drafts — nothing sends without you.
@@ -17,8 +17,20 @@ in the queue and review screen.
 
 Phase 3B closes the loop: approved commitments become cards on a task board with a real
 lifecycle and a completion record, and a promise that passes its date raises an in-app
-reminder. Phase 3's Google work (OAuth login, Gmail drafts, Drive templates, Calendar
-context) is not built — it needs credentials this repo does not have.
+reminder.
+
+Phase 3A/3C/3D add Google. Sign-in is Google OAuth through Supabase Auth, asking for
+identity scopes only; Drive, Calendar, and Gmail are granted separately from `/settings`,
+one capability at a time. Refresh tokens are sealed with envelope encryption and stored in
+a table `authenticated` cannot read. Approving a commitment writes the follow-up into the
+connected account's **Gmail drafts** — never sends it.
+
+**Nothing sends, and that is enforced in code, not by scope.** No Google scope permits
+creating a draft without also permitting send: `gmail.compose` authorizes `drafts.send`. So
+`send_external_email` sits in the contract's `prohibitedActions` — denied even with
+approval — `lib/gmail/client.ts` exposes exactly two endpoints, and a test fails the build
+if the word `send` appears in that module. Verify with
+`rg -i "messages/send|drafts/send" lib/`.
 
 ## Prerequisites
 
@@ -54,6 +66,7 @@ context) is not built — it needs credentials this repo does not have.
 | `/queue/[commitmentId]` | Draft review: draft surface, provenance, flagged-source banner, write/rewrite draft, approval bar |
 | `/tasks` | Task board: open / in progress / delivered, plus the overdue reminder strip |
 | `/dashboard` | Promise risk: overdue, owner+deadline coverage, approved share |
+| `/settings` | Google connections — connect or revoke one capability at a time |
 
 Approving writes an `approval_event`, a `task`, and an `audit_event`, and flips the
 commitment to `tasked`. Discarding writes a `rejected` approval event plus its audit row.
@@ -81,7 +94,8 @@ re-runs extraction against the saved text.
 
 ## Test
 
-`npm test` — 81 tests, no API key and no network required. `tests/rls.test.ts`,
+`npm test` — 201 tests, no API key, no network, and no Google credentials required. Google
+clients are injected, so Drive, Calendar, and Gmail are tested against fakes. `tests/rls.test.ts`,
 `tests/ingest/run.test.ts`, `tests/reminders/sweep.test.ts`, and `tests/tasks/update.test.ts`
 talk to the running local stack, so `supabase start` and `npm run db:reset` must have
 succeeded first. The suite covers cross-org denial, anonymous denial, audit append-only
@@ -111,6 +125,23 @@ one request per minute, which is why the eval paces itself (`EVAL_PACE_MS`, defa
 and takes several minutes. On paid credit, drop `EVAL_PACE_MS` to `0` and consider
 switching the model back; the eval expectations were met by gpt-oss and should hold or
 improve.
+
+## Google setup
+
+Everything except live Google calls works without any of this — local dev keeps the demo
+sign-in button, and an org that has connected nothing simply gets plainer drafts.
+
+1. Create an OAuth client (Web application) in Google Cloud Console. Authorized redirect
+   URIs: `http://localhost:54321/auth/v1/callback` for Supabase Auth sign-in, and
+   `http://localhost:3000/auth/google/connect/callback` for capability grants.
+2. Put `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env.local`, set
+   `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` to the same secret, and flip
+   `[auth.external.google] enabled = true` in `supabase/config.toml`.
+3. Generate `DATA_SOURCE_KEK`:
+   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+   Without it, connecting a data source fails and everything else keeps working.
+4. Restricted Gmail scopes need Google verification plus a CASA assessment before more
+   than 100 users can consent. Fine for a pilot; plan for it before launch.
 
 ## Troubleshooting
 

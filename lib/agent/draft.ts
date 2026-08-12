@@ -8,6 +8,9 @@ export interface DraftInput {
   clientName: string;
   deadline: string | null;
   sourceSpan: string;
+  /** Optional Drive/Calendar context from lib/google/context.ts, already sanitized. */
+  templateText?: string | null;
+  meetingContext?: string | null;
 }
 
 export async function generateFollowUpDraft(

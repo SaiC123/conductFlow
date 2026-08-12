@@ -61,6 +61,23 @@ describe("RLS org isolation", () => {
     expect(error).not.toBeNull();
   });
 
+  it("a signed-in owner cannot read the connected_data_source table at all", async () => {
+    const a = client(await jwt(userA));
+    const { data, error } = await a.from("connected_data_source").select("token_sealed");
+    expect(data).toBeNull();
+    // Granted to service_role only: key and ciphertext never share a trust context.
+    expect(error?.code).toBe("42501");
+  });
+
+  it("an owner reads their connections through the view, which exposes no sealed material", async () => {
+    const a = client(await jwt(userA));
+    const { error } = await a.from("connected_data_source_public").select("account_email,scopes,state");
+    expect(error).toBeNull();
+
+    const sealed = await a.from("connected_data_source_public").select("token_sealed");
+    expect(sealed.error).not.toBeNull();
+  });
+
   it("org A owner sees the phase 2 columns with their defaults", async () => {
     const a = client(await jwt(userA));
     const { data } = await a.from("transcript")
