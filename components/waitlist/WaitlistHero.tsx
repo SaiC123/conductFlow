@@ -32,7 +32,7 @@ export function WaitlistHero({ minHeight = "100dvh", footer }: {
 
       {/* Balanced rather than left to the measure: a hero that breaks as "Something big
           is / coming." puts the weight on the wrong word. */}
-      <h1 style={{ marginTop: "var(--space-5)", fontSize: "clamp(40px, 10vw, 88px)",
+      <h1 style={{ marginTop: "var(--space-5)", fontSize: "clamp(40px, 10vw, 104px)",
         lineHeight: 1.02, letterSpacing: "-0.04em", fontWeight: 600,
         maxWidth: "12ch", textWrap: "balance" }}>
         Something big is coming.
@@ -47,7 +47,10 @@ export function WaitlistHero({ minHeight = "100dvh", footer }: {
 
       <Countdown launchAt={LAUNCH_AT} />
 
-      <div style={{ width: "100%", maxWidth: 420, marginTop: "var(--space-7)",
+      {/* Grows with the display rather than staying a 420px card marooned on a 4K
+          monitor, and never wider than a form should be. */}
+      <div style={{ width: "100%", maxWidth: "clamp(320px, 32vw, 520px)",
+        marginTop: "var(--space-7)",
         background: "var(--surface)", border: "1px solid var(--border)",
         borderRadius: 20, padding: "var(--space-5)" }}>
         <WaitlistForm />

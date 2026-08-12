@@ -49,13 +49,13 @@ export function Countdown({ launchAt }: { launchAt: string }) {
           gap: "clamp(12px, 4vw, 32px)" }}>
           {i > 0 && (
             <span aria-hidden className="tabular" style={{ color: "var(--border-loud)",
-              fontSize: "clamp(28px, 7vw, 56px)", lineHeight: 1, fontWeight: 300 }}>
+              fontSize: "clamp(28px, 7vw, 64px)", lineHeight: 1, fontWeight: 300 }}>
               :
             </span>
           )}
           <div style={{ textAlign: "center", minWidth: "2ch" }}>
             <div aria-hidden className="tabular" style={{
-              fontSize: "clamp(34px, 9vw, 64px)", fontWeight: 600, lineHeight: 1,
+              fontSize: "clamp(34px, 9vw, 76px)", fontWeight: 600, lineHeight: 1,
               letterSpacing: "-0.03em",
               color: left ? "var(--text)" : "var(--border-loud)",
             }}>

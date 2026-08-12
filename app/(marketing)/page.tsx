@@ -44,8 +44,13 @@ const LIMITS = [
   },
 ];
 
+/**
+ * Narrower than the app's frame — this is prose, and a 1280px measure is unreadable — but
+ * it still tracks the display rather than sitting at 960px on every screen ever made.
+ */
 const shell: React.CSSProperties = {
-  maxWidth: 960, marginInline: "auto", paddingInline: "var(--space-5)",
+  maxWidth: "min(100%, clamp(960px, 68vw, 1180px))",
+  marginInline: "auto", paddingInline: "var(--gutter)",
 };
 
 /**

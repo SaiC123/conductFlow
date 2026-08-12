@@ -108,6 +108,31 @@
   --btn-border: var(--border-strong);
 }
 
+/*
+ * One step up on a large monitor. The scale above is sized for a laptop, and on a 1440p or
+ * 4K screen a 13px base with a 1040px column leaves the product marooned in the middle of
+ * the display — small type in a narrow strip, which reads as a page that failed to load
+ * rather than as a dense tool. A step rather than a fluid clamp: every size stays a whole
+ * pixel, so nothing lands on a half-pixel and blurs.
+ */
+@media (min-width: 1600px) {
+  :root {
+    --text-xs: 12px;
+    --text-sm: 13px;
+    --text-base: 14px;
+    --text-md: 17px;
+    --text-lg: 21px;
+    --text-xl: 27px;
+    --text-2xl: 34px;
+    --shell: 1280px;
+  }
+}
+
+/* A phone has no room for a 24px gutter on both edges of a dense row. */
+@media (max-width: 560px) {
+  :root { --gutter: var(--space-4); }
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html {
