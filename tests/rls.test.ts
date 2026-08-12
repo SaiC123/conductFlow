@@ -6,6 +6,7 @@ const URL = process.env.SUPABASE_URL!, ANON = process.env.SUPABASE_ANON_KEY!,
   SECRET = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET!);
 const orgA = "00000000-0000-0000-0000-00000000000a";
 const userA = "00000000-0000-0000-0000-0000000000a1";
+const memberA = "00000000-0000-0000-0000-0000000000a2";
 const userB = "00000000-0000-0000-0000-0000000000b1";
 
 async function jwt(sub: string) {
@@ -85,6 +86,93 @@ describe("RLS org isolation", () => {
     expect(data).not.toBeNull();
     expect(data![0].extraction_status).toBe("pending");
     expect(data![0].injection_flags).toEqual([]);
+  });
+});
+
+describe("agent_blueprint is owner-only", () => {
+  // The escalation this phase exists to close: a member rewrites the org's contract
+  // through PostgREST, granting the agent an unattended Gmail push.
+  it("a member cannot insert a blueprint row", async () => {
+    const m = client(await jwt(memberA));
+    const { error } = await m.from("agent_blueprint").insert({
+      org_id: orgA, version: 9001,
+      allowed_sources: ["transcript"],
+      permitted_actions: ["push_email_draft"],
+      required_approvals: [],
+      escalation_conditions: ["complaint"],
+      success_metric: "follow_up_sent_within_24h",
+      expires_in_minutes: 60,
+    });
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe("42501");
+  });
+
+  it("an owner can insert a blueprint row", async () => {
+    const a = client(await jwt(userA));
+    // Blueprints are append-only and nothing in this suite deletes, so a fixed version
+    // number would collide with itself (23505) the second time the suite runs against a
+    // database that was not reset. Claim the next free version at or above 9002 instead.
+    const { data: highest } = await a.from("agent_blueprint").select("version")
+      .eq("org_id", orgA).order("version", { ascending: false }).limit(1).maybeSingle();
+    const version = Math.max(9002, ((highest?.version as number | undefined) ?? 0) + 1);
+
+    // Contents are deliberately identical to DEFAULT_BLUEPRINT. This row wins
+    // loadBlueprint's ordering for org A from here on, and the suite never deletes, so
+    // anything else would silently change what later stack-backed tests are allowed
+    // to do. See the version-range note in the Phase 5 plan, Task 2.
+    const { error } = await a.from("agent_blueprint").insert({
+      org_id: orgA, version,
+      allowed_sources: ["transcript", "client_contact", "template"],
+      permitted_actions: ["draft_recap", "draft_task_list", "draft_follow_up"],
+      required_approvals: ["push_email_draft", "edit_crm", "create_internal_task",
+        "propose_recurring_task"],
+      escalation_conditions: ["complaint", "legal_concern", "missing_owner_or_deadline"],
+      success_metric: "follow_up_sent_within_24h",
+      expires_in_minutes: 60,
+    });
+    expect(error).toBeNull();
+  });
+
+  it("not even an owner may grant an unattended external action", async () => {
+    const a = client(await jwt(userA));
+    const { error } = await a.from("agent_blueprint").insert({
+      org_id: orgA, version: 9003,
+      allowed_sources: ["transcript"],
+      permitted_actions: ["push_email_draft"],
+      required_approvals: [],
+      escalation_conditions: ["complaint"],
+      success_metric: "follow_up_sent_within_24h",
+      expires_in_minutes: 60,
+    });
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe("23514");
+  });
+
+  it("not even an owner may name a hard-prohibited action", async () => {
+    const a = client(await jwt(userA));
+    const { error } = await a.from("agent_blueprint").insert({
+      org_id: orgA, version: 9004,
+      allowed_sources: ["transcript"],
+      permitted_actions: ["draft_recap"],
+      required_approvals: ["send_external_email"],
+      escalation_conditions: ["complaint"],
+      success_metric: "follow_up_sent_within_24h",
+      expires_in_minutes: 60,
+    });
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe("23514");
+  });
+
+  it("user in org B cannot read org A blueprints", async () => {
+    const b = client(await jwt(userB));
+    const { data } = await b.from("agent_blueprint").select("id").eq("org_id", orgA);
+    expect(data).toEqual([]);
+  });
+
+  it("user in org B cannot read org A escalations", async () => {
+    const b = client(await jwt(userB));
+    const { data } = await b.from("escalation").select("id").eq("org_id", orgA);
+    expect(data).toEqual([]);
   });
 });
 
