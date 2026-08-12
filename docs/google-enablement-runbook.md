@@ -297,15 +297,23 @@ Supabase callback URI in §3 is right.
 draft id is stored and re-checked (`getDraft`), so a second approval does not duplicate.
 
 **7.4 — Calendar context.** Ingest a transcript dated to a day when that Google account had meetings.
-The generated draft carries meeting context, and the draft's `sources` include `calendar_event`.
-Note the day window is computed in the org's timezone, so a transcript dated to a day with no events
-proves nothing.
+The generated draft carries meeting context — read the draft and look for it. Note the day window is
+computed in the org's timezone, so a transcript dated to a day with no events proves nothing.
+
+`buildDraftContext()` tracks which sources it used, but **nothing persists them**:
+`deliverable_draft` is `(org_id, commitment_id, kind, subject, body, created_at)` and has no
+`sources` column. Earlier versions of this document told you to check one. Judge these two steps by
+what the draft says, or add the column first.
 
 **7.5 — Drive templates.** Use the Picker to pick a Drive file whose name contains the word
 `template` — the match in `pickTemplate()` is `/template/i` on the file name, so a file called
 "Follow-up notes" is invisible no matter how template-like its contents. Then ingest a transcript for
-that client. The draft's `sources` include `template`. A template whose name also contains the
+that client. The draft should follow the template's shape. A template whose name also contains the
 client's first word of three or more characters beats a generic one.
+
+Then press **Regenerate** on that draft and confirm the template still shows. Regenerating used to
+drop it: `regenerateDraftFor()` never called `contextForOrg`, so the replacement was written blind.
+Fixed, and worth re-checking here because it is invisible unless you look for it.
 
 **7.6 — The blueprint kill switch.** `/settings/blueprint` → turn `push_email_draft` **off** →
 approve a commitment. No Gmail draft is created, and the review screen says why. This used to fail
