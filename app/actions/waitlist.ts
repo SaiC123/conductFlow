@@ -1,5 +1,8 @@
 "use server";
+import { headers } from "next/headers";
 import { getServerClient } from "@/lib/db/server";
+import { getServiceClient } from "@/lib/db/service";
+import { clientAddress, guardWaitlistBudget, subjectFor } from "@/lib/limits/anon-rate-limit";
 import { validateSignup } from "@/lib/waitlist/signup";
 
 /**
@@ -17,6 +20,13 @@ export async function joinWaitlist(formData: FormData): Promise<SignupResult> {
   // The honeypot returns an empty message, which the form shows as the ordinary
   // confirmation. Nothing is written.
   if (!validated.ok) return validated.error ? validated : { ok: true };
+
+  // Charged with the service client, not the request's: consume_anon_rate_limit is granted
+  // to service_role alone, so that a caller holding the public anon key cannot charge a
+  // subject it invented. Counted before the insert — the point is to refuse the write.
+  const refused = await guardWaitlistBudget(
+    getServiceClient(), subjectFor(clientAddress(await headers())));
+  if (refused) return { ok: false, error: refused.error };
 
   const db = await getServerClient();
   const { error } = await db.from("waitlist_signup").insert({

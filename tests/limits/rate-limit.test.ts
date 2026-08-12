@@ -91,6 +91,17 @@ describe("consume_rate_limit", () => {
     expect(error).not.toBeNull();
     expect(error!.message).toMatch(/not a member/i);
   });
+
+  // The membership check above never runs for a caller with no auth.uid(), so the only thing
+  // standing between a signed-out request and any org's budget is the grant. Postgres hands
+  // EXECUTE to PUBLIC by default; 0016 takes it back. Without that revoke, a stranger holding
+  // the anon key out of the page bundle could spend an org's day of budget by naming its id.
+  it("cannot be called at all by a signed-out caller", async () => {
+    const signedOut = createClient(URL, ANON, { auth: { persistSession: false } });
+    const { error } = await charge(signedOut, { bucket: freshBucket(), orgId: orgA });
+    expect(error).not.toBeNull();
+    expect(error!.message).not.toMatch(/not a member/i);
+  });
 });
 
 describe("consumeLlmBudget", () => {
