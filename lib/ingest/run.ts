@@ -3,10 +3,13 @@ import type { LanguageModel } from "ai";
 import { extractCommitments } from "@/lib/agent/extract";
 import { generateFollowUpDraft } from "@/lib/agent/draft";
 import { canExecute } from "@/lib/agent/execute-policy";
-import { firstAgentContract } from "@/lib/agent/contract";
+import { contractFor } from "@/lib/agent/blueprint-store";
 import { logAudit } from "@/lib/audit/log";
 import { contextForOrg } from "@/lib/google/draft-context";
 import { detectEscalations } from "@/lib/agent/escalate";
+import { detectExceptions } from "@/lib/ops/exceptions";
+import { buildOperationsMap } from "@/lib/ops/map";
+import type { Commitment, Task } from "@/lib/types";
 
 export interface IngestArgs {
   orgId: string; clientId: string; clientName: string;
@@ -22,7 +25,9 @@ export interface IngestResult {
 export async function runIngest(
   db: SupabaseClient, args: IngestArgs, model?: LanguageModel,
 ): Promise<IngestResult> {
-  const decision = canExecute("draft_task_list", false, firstAgentContract);
+  // The org's own blueprint decides, not a constant. An org that has never edited one
+  // gets the shipped defaults.
+  const decision = canExecute("draft_task_list", false, await contractFor(db, args.orgId));
   if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
 
   const { data: conversation, error: convError } = await db.from("conversation")
@@ -46,12 +51,13 @@ export async function runIngest(
 export async function retryExtractionFor(
   db: SupabaseClient, transcriptId: string, model?: LanguageModel,
 ): Promise<IngestResult> {
-  const decision = canExecute("draft_task_list", false, firstAgentContract);
-  if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
-
   const { data: t, error } = await db.from("transcript")
     .select("id,org_id,conversation_id,body").eq("id", transcriptId).single();
   if (error || !t) throw new Error("transcript not found");
+
+  // Checked after the lookup, because the org to check against comes from the transcript.
+  const decision = canExecute("draft_task_list", false, await contractFor(db, t.org_id as string));
+  if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
 
   const { data: c } = await db.from("conversation")
     .select("id,client_id,occurred_at").eq("id", t.conversation_id).single();
@@ -137,6 +143,41 @@ async function finishIngest(
     // ingest must not stack duplicates.
     if (error && error.code !== "23505") throw error;
   }
+  // Exception checks: does this conversation look like how this business normally works?
+  // Best-effort — a statistics failure must never cost an ingest.
+  try {
+    const [{ data: orgCommitments }, { data: orgTasks }, { data: clientHistory }] =
+      await Promise.all([
+        db.from("commitment").select("*").eq("org_id", ctx.orgId),
+        db.from("task").select("*").eq("org_id", ctx.orgId),
+        db.from("commitment").select("*").eq("org_id", ctx.orgId).eq("client_id", ctx.clientId),
+      ]);
+
+    const map = buildOperationsMap({
+      commitments: (orgCommitments ?? []) as Commitment[],
+      tasks: (orgTasks ?? []) as Task[],
+      clientNames: {},
+    }, new Date());
+
+    const exceptions = detectExceptions({
+      commitments: extracted.commitments,
+      map,
+      clientHistory: (clientHistory ?? []) as Commitment[],
+    }, new Date());
+
+    for (const x of exceptions) {
+      const { error } = await db.from("escalation").insert({
+        org_id: ctx.orgId, conversation_id: ctx.conversationId,
+        commitment_id: x.commitmentIndex === null ? null : pairs[x.commitmentIndex]?.id ?? null,
+        kind: x.kind, detail: x.detail, severity: x.severity,
+      });
+      if (error && error.code !== "23505") throw error;
+    }
+  } catch {
+    // Deliberately swallowed: an unusual-practice check is advisory, and losing it must
+    // not lose the commitments the conversation actually produced.
+  }
+
   if (escalations.length > 0) {
     await logAudit({
       orgId: ctx.orgId, actor: "agent", action: "create",

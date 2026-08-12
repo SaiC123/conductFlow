@@ -55,6 +55,17 @@ export default async function SettingsPage({ searchParams }:
         </div>
       )}
       <ConnectionList capabilities={capabilities} connections={rows} />
+
+      <section style={{ marginTop: 32, border: "1px solid var(--border)", borderRadius: 10,
+        padding: 16, background: "var(--surface)" }}>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>Agent blueprint</div>
+        <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
+          What the assistant may do on your behalf, and what it must ask about first.
+        </p>
+        <Link href="/settings/blueprint" style={{ color: "var(--accent)", fontSize: 13 }}>
+          Review the blueprint →
+        </Link>
+      </section>
     </main>
   );
 }
