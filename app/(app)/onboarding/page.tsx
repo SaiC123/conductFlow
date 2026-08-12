@@ -1,5 +1,4 @@
 import { signInAsDemoOwner } from "@/app/actions/dev-auth";
-import { signInWithGoogle } from "@/app/actions/auth";
 import { Card, buttonStyle } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +31,7 @@ export default async function Onboarding({ searchParams }:
         Sign in with Google to get started. We never ask for a password.
       </p>
 
-      <form action={signInWithGoogle}>
+      <form action="/auth/signin" method="get">
         <button type="submit" style={{
           ...buttonStyle("secondary"),
           background: "#fff", color: "#111", borderColor: "#fff", fontWeight: 600,
