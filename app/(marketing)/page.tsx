@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge, buttonStyle, Card, SectionLabel, StatusPill } from "@/components/ui/primitives";
+import { WaitlistHero } from "@/components/waitlist/WaitlistHero";
 import { HARD_PROHIBITED } from "@/lib/agent/blueprint";
 
 /**
@@ -79,9 +80,23 @@ export default function Home() {
       </header>
 
       <main>
+        {/* The waitlist comes first: until early access opens, signing up is the only
+            thing a stranger can actually do. The argument for the product is still here,
+            one scroll down, for the people who want it before they hand over an address. */}
+        <WaitlistHero
+          minHeight="calc(100dvh - 57px)"
+          footer={
+            <a href="#what-it-does" style={{ display: "inline-flex", alignItems: "center",
+              gap: "var(--space-2)", color: "var(--muted)", fontSize: "var(--text-sm)" }}>
+              See what it does
+              <span aria-hidden>↓</span>
+            </a>
+          }
+        />
+
         {/* Copy left, evidence right, and the evidence dropped half a step so the two
             columns don't read as a matched pair. */}
-        <section style={{ ...shell, display: "flex", flexWrap: "wrap",
+        <section id="what-it-does" style={{ ...shell, display: "flex", flexWrap: "wrap",
           gap: "var(--space-7)", alignItems: "flex-start",
           paddingTop: "var(--space-7)", paddingBottom: "var(--space-7)" }}>
           <div style={{ flex: "1 1 400px", minWidth: 0 }}>
