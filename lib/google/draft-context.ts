@@ -24,8 +24,12 @@ export async function contextForOrg(
   ]);
   if (!driveToken && !calendarToken) return EMPTY;
 
+  const { data: org } = await service.from("organization")
+    .select("timezone").eq("id", args.orgId).maybeSingle();
+
   try {
     return await buildDraftContext({
+      timeZone: (org?.timezone as string | undefined) ?? "UTC",
       // A capability the org did not grant yields a client whose calls fail, and
       // buildDraftContext already degrades each source to null on failure.
       drive: createDriveClient(driveToken ?? ""),

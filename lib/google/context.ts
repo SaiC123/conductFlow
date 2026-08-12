@@ -17,6 +17,8 @@ export interface DraftContextInput {
   clientName: string;
   /** Conversation date, YYYY-MM-DD. */
   occurredAt: string;
+  /** IANA zone the org works in. Defaults to UTC, which is what organization.timezone defaults to. */
+  timeZone?: string;
 }
 
 /**
@@ -27,7 +29,8 @@ export interface DraftContextInput {
 export async function buildDraftContext(input: DraftContextInput): Promise<DraftContext> {
   const sources: string[] = [];
   const templateText = await loadTemplate(input.drive, input.clientName, sources);
-  const meetingContext = await loadMeetingContext(input.calendar, input.occurredAt, sources);
+  const meetingContext = await loadMeetingContext(
+    input.calendar, input.occurredAt, input.timeZone ?? "UTC", sources);
   return { templateText, meetingContext, sources };
 }
 
@@ -57,11 +60,11 @@ async function loadTemplate(
 }
 
 async function loadMeetingContext(
-  calendar: CalendarClient, occurredAt: string, sources: string[],
+  calendar: CalendarClient, occurredAt: string, timeZone: string, sources: string[],
 ): Promise<string | null> {
   let events: CalendarEvent[] = [];
   try {
-    events = await calendar.listEvents(dayRange(occurredAt));
+    events = await calendar.listEvents(dayRange(occurredAt, safeZone(timeZone)));
   } catch {
     return null;
   }
@@ -133,9 +136,53 @@ function recordFlags(sources: string[], flagged: string[]) {
 }
 
 /** Events overlapping the conversation date, in UTC. */
-function dayRange(occurredAt: string): { timeMin: string; timeMax: string } {
+/**
+ * How far the zone sits from UTC at a given instant, from Intl rather than a table, so
+ * DST is handled without a dependency.
+ */
+function offsetMs(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(instant).reduce<Record<string, number>>((acc, p) => {
+    if (p.type !== "literal") acc[p.type] = Number(p.value);
+    return acc;
+  }, {});
+  // Intl renders hour 24 for midnight in some zones; Date.UTC normalizes it.
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day,
+    parts.hour, parts.minute, parts.second);
+  return asUtc - instant.getTime();
+}
+
+/**
+ * Midnight-to-midnight in the org's own zone. A 9pm conversation in Sydney belongs to the
+ * Sydney day it happened on, not to the UTC date that instant maps to.
+ *
+ * The offset is applied twice: the first pass can land on the wrong side of a DST
+ * boundary, and re-measuring at the corrected instant settles it.
+ */
+function dayRange(occurredAt: string, timeZone: string): { timeMin: string; timeMax: string } {
   const [y, m, d] = occurredAt.split("-").map(Number);
-  const start = new Date(Date.UTC(y, m - 1, d));
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  return { timeMin: start.toISOString(), timeMax: end.toISOString() };
+  const naive = Date.UTC(y, m - 1, d);
+
+  let start = naive - offsetMs(new Date(naive), timeZone);
+  start = naive - offsetMs(new Date(start), timeZone);
+
+  const nextNaive = naive + 24 * 60 * 60 * 1000;
+  let end = nextNaive - offsetMs(new Date(nextNaive), timeZone);
+  end = nextNaive - offsetMs(new Date(end), timeZone);
+
+  return { timeMin: new Date(start).toISOString(), timeMax: new Date(end).toISOString() };
+}
+
+/** An unknown or malformed zone must not break drafting. */
+function safeZone(timeZone: string | null | undefined): string {
+  if (!timeZone) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date(0));
+    return timeZone;
+  } catch {
+    return "UTC";
+  }
 }
