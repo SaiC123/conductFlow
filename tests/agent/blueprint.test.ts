@@ -46,6 +46,61 @@ describe("blueprintToContract", () => {
   });
 });
 
+describe("blueprintToContract re-applies ALWAYS_NEEDS_APPROVAL", () => {
+  // A row like this cannot be written through the editor. It can be written by a
+  // forged PostgREST insert, which is exactly why the read path must not trust it.
+  const forged = {
+    ...DEFAULT_BLUEPRINT,
+    permitted_actions: ["draft_recap", "push_email_draft", "edit_crm"],
+    required_approvals: ["create_internal_task"],
+  };
+
+  it("moves an always-approval action out of permittedActions", () => {
+    const c = blueprintToContract(forged);
+    expect(c.permittedActions).not.toContain("push_email_draft");
+    expect(c.permittedActions).not.toContain("edit_crm");
+    expect(c.permittedActions).toContain("draft_recap");
+  });
+
+  it("moves it into requiredApprovals rather than dropping it", () => {
+    const c = blueprintToContract(forged);
+    expect(c.requiredApprovals).toContain("push_email_draft");
+    expect(c.requiredApprovals).toContain("edit_crm");
+  });
+
+  it("denies the forged action without approval and allows it with", () => {
+    const c = blueprintToContract(forged);
+    expect(canExecute("push_email_draft", false, c))
+      .toEqual({ ok: false, reason: "needs_approval" });
+    expect(canExecute("push_email_draft", true, c))
+      .toEqual({ ok: true, reason: "approved" });
+  });
+
+  it("does not duplicate an action listed in both arrays", () => {
+    const c = blueprintToContract({
+      ...DEFAULT_BLUEPRINT,
+      permitted_actions: ["push_email_draft"],
+      required_approvals: ["push_email_draft"],
+    });
+    expect(c.requiredApprovals.filter((a) => a === "push_email_draft")).toHaveLength(1);
+  });
+
+  it("still strips hard-prohibited actions from permittedActions", () => {
+    const c = blueprintToContract({
+      ...DEFAULT_BLUEPRINT,
+      permitted_actions: ["draft_recap", "send_external_email"],
+    });
+    expect(c.permittedActions).toEqual(["draft_recap"]);
+    expect(canExecute("send_external_email", true, c))
+      .toEqual({ ok: false, reason: "prohibited" });
+  });
+
+  it("leaves an untouched default blueprint alone", () => {
+    const c = blueprintToContract(DEFAULT_BLUEPRINT);
+    expect(c.permittedActions).toEqual(["draft_recap", "draft_task_list", "draft_follow_up"]);
+  });
+});
+
 describe("validateBlueprintEdit", () => {
   const valid = {
     permitted_actions: ["draft_recap", "draft_task_list"],

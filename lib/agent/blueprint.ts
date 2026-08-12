@@ -57,14 +57,32 @@ export const DEFAULT_BLUEPRINT: BlueprintRow = {
  * The row an org edits, plus the limits it cannot edit. Prohibitions are appended here
  * rather than read from the row, and canExecute checks prohibitions first — so a
  * permitted_actions entry naming a prohibited action loses.
+ *
+ * ALWAYS_NEEDS_APPROVAL is re-applied here too, not only in validateBlueprintEdit: a row
+ * that never passed through the editor — a forged PostgREST insert, say — cannot grant an
+ * external action unattended. It is demoted to approval-gated at read time.
  */
 export function blueprintToContract(row: BlueprintRow): AgentContract {
+  const prohibited = HARD_PROHIBITED as readonly string[];
+  const alwaysApproval = ALWAYS_NEEDS_APPROVAL as readonly string[];
+
+  const permitted = row.permitted_actions.filter(
+    (a) => !prohibited.includes(a) && !alwaysApproval.includes(a));
+
+  // An always-approval action the row tried to grant unattended is demoted, not dropped:
+  // dropping it would make canExecute answer "unknown_action" and deny an action the owner
+  // legitimately enabled. The row loses the "unattended" part of its claim, nothing more.
+  const demoted = row.permitted_actions.filter(
+    (a) => !prohibited.includes(a) && alwaysApproval.includes(a));
+
+  const required = [...new Set([...row.required_approvals, ...demoted])]
+    .filter((a) => !prohibited.includes(a));
+
   return {
     trigger: "approved transcript ready for extraction",
     allowedSources: row.allowed_sources,
-    permittedActions: row.permitted_actions.filter(
-      (a) => !(HARD_PROHIBITED as readonly string[]).includes(a)),
-    requiredApprovals: row.required_approvals,
+    permittedActions: permitted,
+    requiredApprovals: required,
     prohibitedActions: [...HARD_PROHIBITED],
     escalationConditions: row.escalation_conditions,
     successMetric: row.success_metric,
