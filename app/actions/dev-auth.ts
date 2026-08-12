@@ -36,8 +36,5 @@ export async function signInAsDemoOwner() {
   redirect("/queue");
 }
 
-export async function signOut() {
-  const s = await getServerClient();
-  await s.auth.signOut();
-  redirect("/onboarding");
-}
+// signOut lives in app/actions/auth.ts — it is not dev-only, and two identical
+// implementations drift.

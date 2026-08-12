@@ -6,6 +6,7 @@ import { canExecute } from "@/lib/agent/execute-policy";
 import { firstAgentContract } from "@/lib/agent/contract";
 import { logAudit } from "@/lib/audit/log";
 import { contextForOrg } from "@/lib/google/draft-context";
+import { detectEscalations } from "@/lib/agent/escalate";
 
 export interface IngestArgs {
   orgId: string; clientId: string; clientName: string;
@@ -119,6 +120,29 @@ async function finishIngest(
     extraction_error: capNote,
   }).eq("id", ctx.transcriptId);
   if (transcriptUpdateError) throw transcriptUpdateError;
+
+  // Raised before drafting: if the model call dies, the human still gets told that this
+  // conversation contained a complaint or a promise nobody owns.
+  const escalations = detectEscalations({
+    transcript: ctx.transcript,
+    commitments: extracted.commitments,
+  });
+  for (const e of escalations) {
+    const { error } = await db.from("escalation").insert({
+      org_id: ctx.orgId, conversation_id: ctx.conversationId,
+      commitment_id: e.commitmentIndex === null ? null : pairs[e.commitmentIndex]?.id ?? null,
+      kind: e.kind, detail: e.detail,
+    });
+    // 23505: this conversation already has an open escalation of this kind. Re-running
+    // ingest must not stack duplicates.
+    if (error && error.code !== "23505") throw error;
+  }
+  if (escalations.length > 0) {
+    await logAudit({
+      orgId: ctx.orgId, actor: "agent", action: "create",
+      target: `conversation:${ctx.conversationId}:escalate`,
+    });
+  }
 
   // Fetched once for the whole transcript, not per commitment: the template and the day's
   // meetings are the same for every promise made in one conversation. Empty for an org

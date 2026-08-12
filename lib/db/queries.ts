@@ -1,5 +1,5 @@
 import { getServerClient } from "./server";
-import type { Commitment, DeliverableDraft, Transcript, TaskStatus } from "@/lib/types";
+import type { Commitment, DeliverableDraft, Transcript, Task, TaskStatus } from "@/lib/types";
 
 /** Org for the signed-in user, resolved from membership. Null when signed out. */
 export async function getCurrentOrgId(): Promise<string | null> {
@@ -92,6 +92,49 @@ export async function listOpenReminders(orgId: string): Promise<OpenReminder[]> 
     task_id: r.task_id as string,
     due_at: r.due_at as string,
     title: (r.task as { title?: string } | null)?.title ?? "Untitled task",
+  }));
+}
+
+/** Everything the operations map needs, in three reads. */
+export async function loadOperationsData(orgId: string): Promise<{
+  commitments: Commitment[]; tasks: Task[]; clientNames: Record<string, string>;
+}> {
+  const s = await getServerClient();
+  const [commitments, tasks, clients] = await Promise.all([
+    s.from("commitment").select("*").eq("org_id", orgId),
+    s.from("task").select("*").eq("org_id", orgId),
+    s.from("client_contact").select("id,name").eq("org_id", orgId),
+  ]);
+  const clientNames: Record<string, string> = {};
+  for (const c of clients.data ?? []) clientNames[c.id as string] = c.name as string;
+  return {
+    commitments: (commitments.data ?? []) as Commitment[],
+    tasks: (tasks.data ?? []) as Task[],
+    clientNames,
+  };
+}
+
+export interface OpenEscalation {
+  id: string; kind: string; detail: string;
+  conversation_id: string; commitment_id: string | null;
+  conversation_title: string; created_at: string;
+}
+
+/** What the agent decided a human must see before anything goes out. */
+export async function listOpenEscalations(orgId: string): Promise<OpenEscalation[]> {
+  const s = await getServerClient();
+  const { data } = await s.from("escalation")
+    .select("id,kind,detail,conversation_id,commitment_id,created_at,conversation(title)")
+    .eq("org_id", orgId).eq("state", "open")
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    kind: r.kind as string,
+    detail: r.detail as string,
+    conversation_id: r.conversation_id as string,
+    commitment_id: (r.commitment_id as string | null) ?? null,
+    conversation_title: (r.conversation as { title?: string } | null)?.title ?? "Untitled conversation",
+    created_at: r.created_at as string,
   }));
 }
 
