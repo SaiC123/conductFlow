@@ -10,6 +10,7 @@ const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const orgA = "00000000-0000-0000-0000-00000000000a";
 const ownerA = "00000000-0000-0000-0000-0000000000a1";
 const DRIVE = "https://www.googleapis.com/auth/drive.file";
+const GMAIL = "https://www.googleapis.com/auth/gmail.compose";
 
 process.env.DATA_SOURCE_KEK = randomBytes(32).toString("base64");
 
@@ -119,6 +120,45 @@ describe("getAccessToken", () => {
       .eq("id", id).single();
     expect(data!.state).toBe("error");
     expect(data!.last_error).toMatch(/invalid_grant/);
+  });
+
+  it("still works once a second Google account is connected to the org", async () => {
+    await connect([DRIVE]);
+    await storeGrant(db, {
+      orgId: orgA, accountEmail: "second@demo.test", externalAccountId: "sub-456",
+      refreshToken: "1//the-second-refresh-token", scopes: [GMAIL], connectedBy: ownerA,
+    });
+
+    const token = await getAccessToken(db, orgA, DRIVE, {
+      fetchImpl: respondingWith({ access_token: "ya29.first", expires_in: 3600 }),
+    });
+    expect(token).toBe("ya29.first");
+  });
+
+  it("uses the account that granted the scope, not whichever row comes back first", async () => {
+    await connect([DRIVE]);
+    const gmailId = await storeGrant(db, {
+      orgId: orgA, accountEmail: "second@demo.test", externalAccountId: "sub-456",
+      refreshToken: "1//the-second-refresh-token", scopes: [GMAIL], connectedBy: ownerA,
+    });
+
+    await getAccessToken(db, orgA, GMAIL, {
+      fetchImpl: respondingWith({ access_token: "ya29.second", expires_in: 3600 }),
+    });
+    const { data } = await db.from("audit_event").select("target")
+      .eq("target", `data_source:${gmailId}:${GMAIL}`);
+    expect(data!.length).toBeGreaterThan(0);
+  });
+
+  it("still names the scope when no connected account granted it", async () => {
+    await connect([DRIVE]);
+    await storeGrant(db, {
+      orgId: orgA, accountEmail: "second@demo.test", externalAccountId: "sub-456",
+      refreshToken: "1//the-second-refresh-token", scopes: [DRIVE], connectedBy: ownerA,
+    });
+    await expect(getAccessToken(db, orgA, GMAIL, {
+      fetchImpl: respondingWith({ access_token: "ya29.x", expires_in: 3600 }),
+    })).rejects.toThrow(/did not grant/i);
   });
 
   it("audits every token use", async () => {
