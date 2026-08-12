@@ -33,7 +33,7 @@ context) is not built — it needs credentials this repo does not have.
 1. `cp .env.local.example .env.local` and fill in the values printed by `supabase start`
    (`API_URL` → `NEXT_PUBLIC_SUPABASE_URL`, `ANON_KEY`, `SERVICE_ROLE_KEY`).
 2. Set `AI_GATEWAY_API_KEY` in `.env.local` for extraction — it resolves
-   `anthropic/claude-sonnet-5` through the Vercel AI Gateway. `vercel env pull` also
+   `openai/gpt-oss-120b` through the Vercel AI Gateway. `vercel env pull` also
    works: the `VERCEL_OIDC_TOKEN` it writes authenticates the gateway on its own, but
    it expires every 12 hours. `npm test` does not need either; tests inject a mock model.
 3. `npx supabase start` then `npm run db:reset` (applies migrations `0001`–`0003` + seed).
@@ -94,7 +94,18 @@ consulting, coaching, agency, injection) using the real model. It needs a gatewa
 credential — `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`, read from `.env.local` — and
 costs money. Without either, every case skips, so it is safe in CI but scores nothing.
 Run it whenever you change a prompt in `lib/agent/prompts.ts`, and investigate a FAIL
-row before editing the prompt further.
+row before editing the prompt further. Last full run: **5/5 pass**, every source span
+verbatim, injection fixture flagged.
+
+### Model choice
+
+`EXTRACTION_MODEL` is `openai/gpt-oss-120b`. `anthropic/claude-sonnet-5` is the better
+model for this job, but free-tier gateway credit cannot reach it — the call fails with
+`RestrictedModelsError`. Free tier also rate-limits the models it does allow to roughly
+one request per minute, which is why the eval paces itself (`EVAL_PACE_MS`, default 45s)
+and takes several minutes. On paid credit, drop `EVAL_PACE_MS` to `0` and consider
+switching the model back; the eval expectations were met by gpt-oss and should hold or
+improve.
 
 ## Troubleshooting
 
@@ -111,6 +122,11 @@ row before editing the prompt further.
 - **`customer_verification_required` (HTTP 403) from the gateway.** Authentication
   succeeded; the Vercel account has no payment method, so AI Gateway refuses every
   request. Add a card under the team's AI settings — no code change helps.
+- **`RestrictedModelsError` (HTTP 403).** The model is paid-credit only. Either top up
+  gateway credit or point `EXTRACTION_MODEL` at a model free tier allows.
+- **`GatewayRateLimitError`.** Free-tier throttling, not a bug. Space the calls out
+  (`EVAL_PACE_MS`) or top up. Ingest retries twice and then leaves the transcript in
+  **Needs attention**, so nothing is lost.
 
 ## Deploy
 

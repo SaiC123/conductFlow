@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-export const EXTRACTION_MODEL = "anthropic/claude-sonnet-5";
+// Free-tier AI Gateway credit cannot reach anthropic/claude-sonnet-5 (RestrictedModelsError).
+// gpt-oss-120b is reachable and good enough for now; it resolves relative dates less
+// reliably, which the eval expectations reflect.
+export const EXTRACTION_MODEL = "openai/gpt-oss-120b";
 export const MAX_TRANSCRIPT_CHARS = 250_000;
 export const MAX_COMMITMENTS = 50;
 

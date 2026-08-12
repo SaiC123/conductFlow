@@ -15,6 +15,12 @@ const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
 const hasKey = !!(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN);
 const rows: Record<string, string>[] = [];
 
+// Free-tier gateway credit rate-limits every model it allows. Fixtures run back to back
+// trip that limiter, so each one waits before calling. Remove the pause once the account
+// holds paid credit.
+const PACE_MS = Number(process.env.EVAL_PACE_MS ?? 45_000);
+const pace = () => new Promise((r) => setTimeout(r, PACE_MS));
+
 describe("extraction eval", () => {
   afterAll(() => {
     if (rows.length) console.table(rows);
@@ -27,7 +33,8 @@ describe("extraction eval", () => {
   for (const file of files) {
     const f = JSON.parse(readFileSync(join(dir, file), "utf8")) as Fixture;
 
-    it.skipIf(!hasKey)(`${f.name} matches expected commitment quality`, async () => {
+    it.skipIf(!hasKey)(`${f.name} matches expected commitment quality`, { timeout: 180_000 }, async () => {
+      await pace();
       const r = await extractCommitments({
         transcript: f.transcript, conversationDate: f.conversationDate, clientName: f.clientName,
       });
