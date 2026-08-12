@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LanguageModel } from "ai";
 import { generateFollowUpDraft } from "@/lib/agent/draft";
 import { canExecute } from "@/lib/agent/execute-policy";
-import { firstAgentContract } from "@/lib/agent/contract";
+import { contractFor } from "@/lib/agent/blueprint-store";
 import { logAudit } from "@/lib/audit/log";
 
 export interface RegenerateArgs {
@@ -23,14 +23,16 @@ export interface RegenerateResult {
 export async function regenerateDraftFor(
   db: SupabaseClient, args: RegenerateArgs, model?: LanguageModel,
 ): Promise<RegenerateResult> {
-  const decision = canExecute("draft_follow_up", false, firstAgentContract);
-  if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
-
   const { data: commitment, error } = await db.from("commitment")
     .select("id,org_id,client_id,text,deadline,source_span")
     .eq("id", args.commitmentId).maybeSingle();
   if (error) throw error;
   if (!commitment) throw new Error("commitment not found");
+
+  // Checked after the lookup, because the org to check against comes from the commitment.
+  const decision = canExecute("draft_follow_up", false,
+    await contractFor(db, commitment.org_id as string));
+  if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
 
   const { data: client } = await db.from("client_contact")
     .select("name").eq("id", commitment.client_id).maybeSingle();

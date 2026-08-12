@@ -3,7 +3,7 @@ import { getServerClient } from "@/lib/db/server";
 import { getServiceClient } from "@/lib/db/service";
 import { executeAction } from "@/lib/agent/execute";
 import { canExecute } from "@/lib/agent/execute-policy";
-import { firstAgentContract } from "@/lib/agent/contract";
+import { contractFor } from "@/lib/agent/blueprint-store";
 import { pushDraftToGmail } from "@/lib/gmail/push";
 import { getAccessToken, DataSourceUnavailable } from "@/lib/google/tokens";
 import { CAPABILITIES } from "@/lib/google/scopes";
@@ -27,7 +27,7 @@ export async function approveAndCreateTask(commitmentId: string) {
   if (fetchError || !data) throw new Error("commitment not found");
   const c = data as Commitment;
   await executeAction(
-    { action: "create_internal_task", orgId: c.org_id, actorUserId: uid,
+    { action: "create_internal_task", orgId: c.org_id, actorUserId: uid, actor: "human",
       subjectType: "commitment", subjectId: commitmentId, approved: true },
     async () => {
       const { error: approvalError } = await s.from("approval_event").insert({
@@ -67,10 +67,12 @@ export async function pushApprovedDraft(
     .select("id").eq("commitment_id", commitmentId).limit(1).maybeSingle();
   if (!draft) return { pushed: false, reason: "no draft to push" };
 
-  const decision = canExecute("push_email_draft", true, firstAgentContract);
+  const service = getServiceClient();
+  // The org's own blueprint, not a constant: an owner who switched push_email_draft off
+  // must actually get no Gmail draft.
+  const decision = canExecute("push_email_draft", true, await contractFor(service, orgId));
   if (!decision.ok) return { pushed: false, reason: decision.reason };
 
-  const service = getServiceClient();
   try {
     const token = await getAccessToken(service, orgId, GMAIL_COMPOSE_SCOPE);
     const { data: source } = await service.from("connected_data_source")

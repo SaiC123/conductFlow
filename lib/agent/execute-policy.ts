@@ -14,5 +14,8 @@ export function canExecute(action: string, approved: boolean, c: AgentContract):
 
 export interface ActionRequest {
   action: string; orgId: string; actorUserId: string | null;
+  /** Who is taking this action. A human click and an unattended agent run are not the
+   *  same event, and an audit trail that calls both "human" cannot be reasoned about. */
+  actor: "human" | "agent";
   subjectType: string; subjectId: string; approved: boolean;
 }
