@@ -9,7 +9,7 @@ export function DraftSurface({ draft, provenance }:
     </div>
     {draft?.subject && <div style={{ fontWeight: 600, marginTop: 12 }}>{draft.subject}</div>}
     <p style={{ marginTop: 8, whiteSpace: "pre-wrap", color: "var(--text)" }}>
-      {draft?.body ?? "No draft yet. Approve the commitment to generate one."}</p>
+      {draft?.body ?? "No draft for this commitment. Drafts are written during ingest; this one's draft call did not succeed. Approving still creates the task."}</p>
     <div className="mono" style={{ marginTop: 16, fontSize: 12, color: "var(--muted)" }}>
       Read: {provenance.join(" · ")}</div>
   </section>);
