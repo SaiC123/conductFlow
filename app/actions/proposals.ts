@@ -19,7 +19,6 @@ export async function proposeRecurring(patternKey: string) {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to add a suggestion.");
   const db = await getServerClient();
-  const { data: auth } = await db.auth.getUser();
 
   const decision = canExecute("propose_recurring_task", true, await contractFor(db, orgId));
   if (!decision.ok) {
@@ -51,10 +50,11 @@ export async function proposeRecurring(patternKey: string) {
   });
   if (error) throw error;
 
+  // A human clicked the button — the comment above says the click is the approval — so the
+  // row says human. payloadHash is dropped: the column holds a hash, not a raw user id.
   await logAudit({
-    orgId, actor: "agent", action: "create",
+    orgId, actor: "human", action: "create",
     target: `commitment:recurring:${pattern.key}`,
-    payloadHash: auth.user?.id,
   });
 
   revalidatePath("/queue");

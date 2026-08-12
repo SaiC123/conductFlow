@@ -9,6 +9,8 @@ import { contextForOrg } from "@/lib/google/draft-context";
 import { detectEscalations } from "@/lib/agent/escalate";
 import { detectExceptions } from "@/lib/ops/exceptions";
 import { buildOperationsMap } from "@/lib/ops/map";
+import { logFailure } from "@/lib/observability/log";
+import type { AgentContract } from "@/lib/agent/contract";
 import type { Commitment, Task } from "@/lib/types";
 
 export interface IngestArgs {
@@ -26,8 +28,10 @@ export async function runIngest(
   db: SupabaseClient, args: IngestArgs, model?: LanguageModel,
 ): Promise<IngestResult> {
   // The org's own blueprint decides, not a constant. An org that has never edited one
-  // gets the shipped defaults.
-  const decision = canExecute("draft_task_list", false, await contractFor(db, args.orgId));
+  // gets the shipped defaults. Kept, not discarded: finishIngest needs it again to decide
+  // which escalation kinds this org asked to be shown.
+  const contract = await contractFor(db, args.orgId);
+  const decision = canExecute("draft_task_list", false, contract);
   if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
 
   const { data: conversation, error: convError } = await db.from("conversation")
@@ -44,7 +48,7 @@ export async function runIngest(
   return finishIngest(db, {
     orgId: args.orgId, clientId: args.clientId, clientName: args.clientName,
     conversationId: conversation.id, transcriptId: transcript.id,
-    transcript: args.transcript, occurredAt: args.occurredAt,
+    transcript: args.transcript, occurredAt: args.occurredAt, contract,
   }, model);
 }
 
@@ -56,7 +60,8 @@ export async function retryExtractionFor(
   if (error || !t) throw new Error("transcript not found");
 
   // Checked after the lookup, because the org to check against comes from the transcript.
-  const decision = canExecute("draft_task_list", false, await contractFor(db, t.org_id as string));
+  const contract = await contractFor(db, t.org_id as string);
+  const decision = canExecute("draft_task_list", false, contract);
   if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
 
   const { data: c } = await db.from("conversation")
@@ -79,14 +84,14 @@ export async function retryExtractionFor(
   return finishIngest(db, {
     orgId: t.org_id, clientId: c!.client_id, clientName: client?.name ?? "client",
     conversationId: t.conversation_id, transcriptId: t.id,
-    transcript: t.body, occurredAt: (c!.occurred_at as string).slice(0, 10),
+    transcript: t.body, occurredAt: (c!.occurred_at as string).slice(0, 10), contract,
   }, model);
 }
 
 async function finishIngest(
   db: SupabaseClient,
   ctx: { orgId: string; clientId: string; clientName: string; conversationId: string;
-    transcriptId: string; transcript: string; occurredAt: string },
+    transcriptId: string; transcript: string; occurredAt: string; contract: AgentContract },
   model?: LanguageModel,
 ): Promise<IngestResult> {
   let extracted;
@@ -96,9 +101,10 @@ async function finishIngest(
     }, model);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    await db.from("transcript").update({
+    const { error: markError } = await db.from("transcript").update({
       extraction_status: "failed", extraction_error: message,
     }).eq("id", ctx.transcriptId);
+    logFailure("finishIngest.markFailed", markError);
     throw e;
   }
 
@@ -133,7 +139,12 @@ async function finishIngest(
     transcript: ctx.transcript,
     commitments: extracted.commitments,
   });
-  for (const e of escalations) {
+  // The blueprint decides which conditions a human must be shown. The exception checks
+  // below are a different thing — advisory statistics the blueprint has no column for and
+  // never claimed to govern — so they are not filtered here.
+  const governed = new Set(ctx.contract.escalationConditions);
+  const raised = escalations.filter((x) => governed.has(x.kind));
+  for (const e of raised) {
     const { error } = await db.from("escalation").insert({
       org_id: ctx.orgId, conversation_id: ctx.conversationId,
       commitment_id: e.commitmentIndex === null ? null : pairs[e.commitmentIndex]?.id ?? null,
@@ -173,12 +184,16 @@ async function finishIngest(
       });
       if (error && error.code !== "23505") throw error;
     }
-  } catch {
-    // Deliberately swallowed: an unusual-practice check is advisory, and losing it must
-    // not lose the commitments the conversation actually produced.
+  } catch (e) {
+    // Still deliberately swallowed: an unusual-practice check is advisory, and losing it
+    // must not lose the commitments the conversation actually produced. But it is logged,
+    // because a check that has been broken for a month should be discoverable.
+    logFailure("finishIngest.exceptionChecks", e);
   }
 
-  if (escalations.length > 0) {
+  // The filtered list, not the raw one: an audit row saying this conversation was escalated
+  // when the blueprint silenced every kind it found would be a lie.
+  if (raised.length > 0) {
     await logAudit({
       orgId: ctx.orgId, actor: "agent", action: "create",
       target: `conversation:${ctx.conversationId}:escalate`,
@@ -205,6 +220,9 @@ async function finishIngest(
     });
     if (error) throw error;
   }));
+  for (const d of drafts) {
+    if (d.status === "rejected") logFailure("finishIngest.draft", d.reason);
+  }
   const draftCount = drafts.filter((d) => d.status === "fulfilled").length;
 
   await logAudit({
