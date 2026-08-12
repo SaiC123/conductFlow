@@ -1,36 +1,13 @@
 import Link from "next/link";
-import { buttonStyle } from "@/components/ui/primitives";
+import { Badge, buttonStyle, Card, SectionLabel, StatusPill } from "@/components/ui/primitives";
 import { HARD_PROHIBITED } from "@/lib/agent/blueprint";
 
 /**
- * The landing page's job is one sentence an owner recognises, the actual loop, and the
- * boundary the product is sold on. No testimonials, logos, or metrics: none exist yet,
- * and inventing them on a page a real customer reads would be a lie.
+ * One argument, in order: here is a promise you made, here is the evidence it came from,
+ * here is the line the product cannot cross, and here is what it is bad at. No
+ * testimonials, logos, or metrics — none exist yet, and inventing them on a page a real
+ * customer reads would be a lie.
  */
-
-const STAGES = [
-  {
-    n: "01",
-    title: "The conversation happens",
-    body: "Paste your notes, or upload the transcript from the call. A tutoring check-in, a client review, a discovery call.",
-  },
-  {
-    n: "02",
-    title: "Every promise gets pulled out",
-    body: "Who owes what, by when — each one carrying the exact words from the conversation it came from, so you can check it in a second.",
-  },
-  {
-    n: "03",
-    title: "You decide",
-    body: "Nothing moves until you say so. Approve the ones that are right, discard the ones that aren't, edit the draft it wrote in your voice.",
-    halt: true,
-  },
-  {
-    n: "04",
-    title: "It gets followed through",
-    body: "Approved promises become tasks. If the date passes and it isn't done, you hear about it — before the client does.",
-  },
-];
 
 /** Plain English for the limits enforced in code, not in settings. */
 const NEVER: Record<string, string> = {
@@ -42,9 +19,51 @@ const NEVER: Record<string, string> = {
   delete_record: "Delete a record",
 };
 
+/** The one prohibition worth arguing in full. The rest read faster as a list. */
+const HEADLINE_DENIAL = "send_external_email";
+const REST_DENIED = HARD_PROHIBITED.filter((a) => a !== HEADLINE_DENIAL);
+
+/** The things an owner would otherwise discover in week two. */
+const LIMITS = [
+  {
+    label: "the call",
+    body: "Nothing of ours joins your call. There is no bot in the meeting and no recording. You bring the transcript afterwards, or just the notes you typed while you talked.",
+  },
+  {
+    label: "nudges",
+    body: "An overdue promise shows up on your board the next time you open it. Nobody gets emailed about it, and that includes you.",
+  },
+  {
+    label: "mistakes",
+    body: "Extraction is a language model reading a transcript, and it misreads things. That is why every promise arrives with the sentence it came from, and why one whose words cannot be found in your transcript is marked low confidence instead of passed off as certain. You are checking evidence, not trusting a summary.",
+  },
+  {
+    label: "the map",
+    body: "The operations view stays quiet until there are about twenty commitments in it. Before that there is not enough there to say anything honest about your lead times.",
+  },
+];
+
 const shell: React.CSSProperties = {
   maxWidth: 960, marginInline: "auto", paddingInline: "var(--space-5)",
 };
+
+/**
+ * The page's spine: a mono label in the margin, prose beside it. Mono is the machine's
+ * side of the product — file names, action ids, timestamps — and the sans column is the
+ * human's. It wraps to stacked rather than needing a media query inline styles can't write.
+ */
+function Rail({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)",
+      alignItems: "baseline" }}>
+      <span className="mono" style={{ flex: "0 0 9ch", color: "var(--faint)",
+        fontSize: "var(--text-xs)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        {label}
+      </span>
+      <div style={{ flex: "1 1 34ch", minWidth: 0, maxWidth: "60ch" }}>{children}</div>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
@@ -55,161 +74,237 @@ export default function Home() {
           <span style={{ fontWeight: 600, fontSize: "var(--text-md)", letterSpacing: "-0.02em" }}>
             ConductFlow
           </span>
-          <Link href="/onboarding" style={{ fontSize: "var(--text-base)" }}>Sign in →</Link>
+          <Link href="/onboarding" style={{ fontSize: "var(--text-base)" }}>Sign in</Link>
         </div>
       </header>
 
       <main>
-        {/* Atmosphere, not decoration: one soft field behind the hero so the page has a
-            light source instead of reading as a flat sheet. */}
-        <section style={{ position: "relative", overflow: "hidden",
-          borderBottom: "1px solid var(--border)" }}>
-          <div aria-hidden style={{
-            position: "absolute", inset: 0, pointerEvents: "none",
-            background:
-              "radial-gradient(720px 320px at 12% -10%, var(--accent-quiet), transparent 70%)",
-          }} />
-          <div style={{ ...shell, position: "relative",
-            paddingBlock: "var(--space-7)" }}>
-            <p className="mono" style={{ color: "var(--accent)", fontSize: "var(--text-xs)",
-              letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              For client-service teams of 2–20
-            </p>
+        {/* Copy left, evidence right, and the evidence dropped half a step so the two
+            columns don't read as a matched pair. */}
+        <section style={{ ...shell, display: "flex", flexWrap: "wrap",
+          gap: "var(--space-7)", alignItems: "flex-start",
+          paddingTop: "var(--space-7)", paddingBottom: "var(--space-7)" }}>
+          <div style={{ flex: "1 1 400px", minWidth: 0 }}>
             <h1 style={{
-              // Derived from the scale rather than a new raw size; the ops-tool cap of 30px
-              // is deliberate inside the app, but a landing headline earns more room.
-              fontSize: "clamp(var(--text-xl), 4.6vw, calc(var(--text-2xl) * 1.35))",
-              letterSpacing: "-0.035em", lineHeight: 1.04,
-              marginTop: "var(--space-4)", maxWidth: "22ch",
-              // Explicit break, and the first line kept whole: at 16ch the measure was
-              // narrower than the sentence, so "it." wrapped alone onto its own line.
-              textWrap: "balance",
+              // Derived from the scale; the ops-tool cap of 30px is deliberate inside the
+              // app, but a landing headline earns more room.
+              fontSize: "clamp(var(--text-xl), 3.4vw, calc(var(--text-2xl) * 1.2))",
+              letterSpacing: "-0.035em", lineHeight: 1.08, textWrap: "balance",
             }}>
-              <span style={{ display: "block", whiteSpace: "nowrap" }}>
-                You said you&apos;d send it.
-              </span>
-              ConductFlow makes sure you do.
+              You said you&apos;d send it by Friday.
             </h1>
-            <p style={{ color: "var(--muted)", fontSize: "var(--text-md)", lineHeight: 1.6,
-              marginTop: "var(--space-4)", maxWidth: "56ch" }}>
-              After a client conversation, it finds every promise you made, drafts the follow-up
-              in your words, and tracks it until it&apos;s delivered — so nothing quietly falls
-              through the week.
+            <p style={{ fontSize: "var(--text-md)", lineHeight: 1.6,
+              marginTop: "var(--space-4)", maxWidth: "40ch" }}>
+              That was minute thirty-eight of a Tuesday call. It is not in your inbox, it is
+              not on a list, and the parent is going to remember it.
             </p>
-            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center",
-              flexWrap: "wrap", marginTop: "var(--space-6)" }}>
+            <p style={{ color: "var(--muted)", lineHeight: 1.7,
+              marginTop: "var(--space-4)", maxWidth: "44ch" }}>
+              ConductFlow reads the transcript and pulls out what you committed to, with the
+              sentence you said it in still attached. Then it writes you a follow-up to approve
+              or throw away. Approving one puts the reply in your own Gmail drafts, unsent.
+            </p>
+            <div style={{ marginTop: "var(--space-6)" }}>
               <Link href="/onboarding" style={{ ...buttonStyle("primary"), color: "#fff",
                 padding: "10px 18px" }}>
-                Get started
+                Start with one call
               </Link>
-              <span style={{ color: "var(--faint)", fontSize: "var(--text-sm)" }}>
-                Sign in with Google. No password, no card.
+              <p className="mono" style={{ color: "var(--faint)", fontSize: "var(--text-xs)",
+                marginTop: "var(--space-3)" }}>
+                google sign-in · name and email only
+              </p>
+            </div>
+          </div>
+
+          <figure style={{ flex: "1 1 300px", minWidth: 0, margin: 0,
+            marginTop: "var(--space-6)" }}>
+            <figcaption className="mono" style={{ color: "var(--faint)",
+              fontSize: "var(--text-xs)", letterSpacing: "0.06em", textTransform: "uppercase",
+              marginBottom: "var(--space-3)" }}>
+              Example · tuesday-check-in.vtt · 00:38:12
+            </figcaption>
+
+            <div style={{ borderLeft: "1px solid var(--border-strong)",
+              paddingLeft: "var(--space-4)" }}>
+              <p style={{ lineHeight: 1.7 }}>
+                <span className="mono" style={{ color: "var(--faint)",
+                  fontSize: "var(--text-sm)" }}>You</span>{" "}
+                Yeah, that&apos;s fine.{" "}
+                {/* The one accent above the fold. Tint plus a rule under it, so the
+                    highlight survives a monochrome screen. */}
+                <mark style={{ background: "var(--accent-quiet)", color: "var(--text)",
+                  boxShadow: "inset 0 -1px 0 var(--accent)" }}>
+                  I&apos;ll get Mia&apos;s revised practice set over to you by Friday.
+                </mark>
+              </p>
+              <p style={{ lineHeight: 1.7, color: "var(--muted)",
+                marginTop: "var(--space-2)" }}>
+                <span className="mono" style={{ color: "var(--faint)",
+                  fontSize: "var(--text-sm)" }}>Parent</span>{" "}
+                Perfect. She&apos;ll be pleased.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)",
+              paddingLeft: "var(--space-4)", paddingBlock: "var(--space-3)" }}>
+              <span aria-hidden style={{ width: 1, height: "var(--space-5)",
+                background: "var(--border-strong)", flexShrink: 0 }} />
+              <span className="mono" style={{ color: "var(--faint)",
+                fontSize: "var(--text-xs)" }}>
+                matched word for word in the transcript
               </span>
             </div>
+
+            <Card>
+              <div style={{ display: "flex", justifyContent: "space-between",
+                gap: "var(--space-3)", alignItems: "baseline", flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 600, fontSize: "var(--text-md)" }}>
+                  Send Mia&apos;s revised practice set
+                </span>
+                <Badge tone="ok">high confidence</Badge>
+              </div>
+              <div className="mono" style={{ color: "var(--muted)",
+                fontSize: "var(--text-sm)", marginTop: "var(--space-2)" }}>
+                owner: you · due Fri 14 Mar
+              </div>
+              <div style={{ marginTop: "var(--space-3)" }}>
+                <StatusPill tone="warn" label="Waiting for your approval" />
+              </div>
+              <p style={{ borderTop: "1px solid var(--border)", marginTop: "var(--space-3)",
+                paddingTop: "var(--space-3)", color: "var(--muted)", lineHeight: 1.6 }}>
+                The draft is already written. Approving it puts the reply in your Gmail drafts.
+                Sending it is still your job.
+              </p>
+            </Card>
+
+            <p style={{ color: "var(--faint)", fontSize: "var(--text-sm)", lineHeight: 1.6,
+              marginTop: "var(--space-4)" }}>
+              Paste the notes, or upload the .vtt. Speaker labels are kept, because that is how
+              it knows the promise was yours and not theirs.
+            </p>
+          </figure>
+        </section>
+
+        {/* A thin band on purpose: the page shouldn't be four tall sections in a row. */}
+        <section style={{ borderTop: "1px solid var(--border)",
+          borderBottom: "1px solid var(--border)" }}>
+          <div style={{ ...shell, paddingBlock: "var(--space-5)" }}>
+            <Rail label="after">
+              <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+                An approved promise becomes a card on a board with an owner and a date. Marking
+                it delivered stamps who finished it and when, so a month later you can still
+                answer whether that practice set actually went out.
+              </p>
+            </Rail>
           </div>
         </section>
 
-        <section style={{ ...shell, paddingBlock: "var(--space-7)" }}>
-          <h2 style={{ fontSize: "var(--text-lg)" }}>How it runs</h2>
-          <ol style={{ listStyle: "none", padding: 0, margin: "var(--space-5) 0 0" }}>
-            {STAGES.map((s, i) => (
-              <li key={s.n} style={{
-                display: "grid", gridTemplateColumns: "auto 1fr", gap: "var(--space-4)",
-                alignItems: "start",
-                paddingBlock: "var(--space-5)",
-                borderTop: i === 0 ? "none" : "1px solid var(--border)",
-              }}>
-                <span className="mono" aria-hidden style={{
-                  fontSize: "var(--text-sm)",
-                  color: s.halt ? "var(--accent)" : "var(--faint)",
-                  paddingTop: 2, width: "3ch",
-                }}>
-                  {s.n}
-                </span>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)",
-                    flexWrap: "wrap" }}>
-                    <h3 style={{ fontSize: "var(--text-md)" }}>{s.title}</h3>
-                    {/* The one moment the flow deliberately stops. Marked in text, not
-                        only in colour. */}
-                    {s.halt && (
-                      <span className="mono" style={{
-                        fontSize: "var(--text-xs)", letterSpacing: "0.06em",
-                        textTransform: "uppercase", color: "var(--accent)",
-                        border: "1px solid var(--accent)", borderRadius: 999,
-                        padding: "2px 8px", background: "var(--accent-quiet)",
-                      }}>
-                        Stops here for you
-                      </span>
-                    )}
-                  </div>
-                  <p style={{ color: "var(--muted)", marginTop: "var(--space-2)",
-                    maxWidth: "62ch", lineHeight: 1.6 }}>
-                    {s.body}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section style={{ borderBlock: "1px solid var(--border)", background: "var(--surface)" }}>
+        <section style={{ background: "var(--surface)",
+          borderBottom: "1px solid var(--border)" }}>
           <div style={{ ...shell, paddingBlock: "var(--space-7)" }}>
-            <h2 style={{ fontSize: "var(--text-lg)" }}>What it will never do</h2>
-            <p style={{ color: "var(--muted)", marginTop: "var(--space-2)", maxWidth: "62ch",
-              lineHeight: 1.6 }}>
-              Not a setting you have to remember to switch off. These limits are fixed in the
-              product — there is no configuration, and no support ticket, that turns them on.
+            <SectionLabel>The floor</SectionLabel>
+            <h2 style={{ fontSize: "var(--text-xl)", maxWidth: "24ch" }}>
+              Six things it cannot do, whatever anyone sets
+            </h2>
+            <p style={{ color: "var(--muted)", marginTop: "var(--space-3)", maxWidth: "58ch",
+              lineHeight: 1.7 }}>
+              These are refused by the code that runs before any action, not by a preference
+              somebody could change on a bad afternoon. There is no switch in settings for them,
+              and no support ticket that makes an exception.
             </p>
-            <ul style={{ listStyle: "none", padding: 0, margin: "var(--space-5) 0 0",
-              display: "grid", gap: "var(--space-2)",
-              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-              {HARD_PROHIBITED.map((action) => (
-                <li key={action} style={{
-                  display: "flex", alignItems: "baseline", gap: "var(--space-3)",
-                  border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
-                  padding: "var(--space-3)", background: "var(--canvas)",
-                }}>
-                  <span aria-hidden className="mono" style={{ color: "var(--danger)",
-                    fontSize: "var(--text-sm)" }}>✕</span>
-                  <span>
-                    {NEVER[action] ?? action}
-                    <span className="mono" style={{ display: "block", color: "var(--faint)",
-                      fontSize: "var(--text-xs)", marginTop: 2 }}>{action}</span>
-                  </span>
+
+            {/* One denial carries the whole pitch, so it gets the weight and the proof; the
+                other five are a list, not five more cards. */}
+            <div style={{ marginTop: "var(--space-5)", background: "var(--raised)",
+              borderLeft: "2px solid var(--danger)", borderRadius: "var(--radius-sm)",
+              padding: "var(--space-5)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between",
+                gap: "var(--space-3)", alignItems: "baseline", flexWrap: "wrap" }}>
+                <h3 style={{ fontSize: "var(--text-lg)" }}>{NEVER[HEADLINE_DENIAL]}</h3>
+                <span className="mono" style={{ color: "var(--danger)",
+                  fontSize: "var(--text-xs)", letterSpacing: "0.08em",
+                  textTransform: "uppercase" }}>
+                  refused in code
+                </span>
+              </div>
+              <div className="mono" style={{ color: "var(--faint)", fontSize: "var(--text-sm)",
+                marginTop: "var(--space-2)" }}>
+                {HEADLINE_DENIAL}
+              </div>
+              <p style={{ marginTop: "var(--space-4)", maxWidth: "58ch", lineHeight: 1.7,
+                color: "var(--muted)" }}>
+                Not to your client, and not even with your approval. The Gmail module has two
+                calls in it and neither one sends. A test reads that file and fails the build if
+                the word turns up there at all. What approving does is write the follow-up into
+                your own Gmail drafts, where it waits until you open Gmail and send it yourself.
+              </p>
+            </div>
+
+            <ul style={{ listStyle: "none", padding: 0, margin: "var(--space-5) 0 0" }}>
+              {REST_DENIED.map((action) => (
+                <li key={action} style={{ display: "flex", justifyContent: "space-between",
+                  gap: "var(--space-4)", flexWrap: "wrap", paddingBlock: "var(--space-3)",
+                  borderTop: "1px solid var(--border)" }}>
+                  <span>{NEVER[action] ?? action}</span>
+                  <span className="mono" style={{ color: "var(--faint)",
+                    fontSize: "var(--text-sm)" }}>{action}</span>
                 </li>
               ))}
             </ul>
-            <p style={{ color: "var(--muted)", marginTop: "var(--space-5)", maxWidth: "62ch",
-              lineHeight: 1.6 }}>
-              Everything else is yours to decide, in a blueprint you can read and change: what the
-              assistant does on its own, and what it has to ask you about first.
+
+            <p style={{ color: "var(--muted)", marginTop: "var(--space-5)", maxWidth: "58ch",
+              lineHeight: 1.7 }}>
+              Everything above that floor is yours to set: what the assistant may do on its own,
+              and what it has to ask you about first. Each change writes a new version instead of
+              overwriting the last one, so what it was allowed to do on the day it did something
+              stays answerable.
             </p>
           </div>
         </section>
 
         <section style={{ ...shell, paddingBlock: "var(--space-7)" }}>
-          <h2 style={{ fontSize: "var(--text-lg)", maxWidth: "24ch" }}>
-            Start with one conversation.
+          <SectionLabel>Limits</SectionLabel>
+          <h2 style={{ fontSize: "var(--text-lg)", maxWidth: "30ch" }}>
+            What you would find out in week two
           </h2>
-          <p style={{ color: "var(--muted)", marginTop: "var(--space-3)", maxWidth: "56ch",
-            lineHeight: 1.6 }}>
-            Paste the notes from your last client call and see what it finds. Nothing is sent,
-            and nothing is created until you approve it.
-          </p>
-          <Link href="/onboarding" style={{ ...buttonStyle("primary"), color: "#fff",
-            padding: "10px 18px", marginTop: "var(--space-5)" }}>
-            Get started
-          </Link>
+          <div style={{ display: "grid", gap: "var(--space-5)", marginTop: "var(--space-5)" }}>
+            {LIMITS.map((l) => (
+              <Rail key={l.label} label={l.label}>
+                <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>{l.body}</p>
+              </Rail>
+            ))}
+          </div>
         </section>
 
-        <footer style={{ borderTop: "1px solid var(--border)" }}>
-          <div style={{ ...shell, paddingBlock: "var(--space-5)", color: "var(--faint)",
-            fontSize: "var(--text-sm)" }}>
-            ConductFlow — every client promise, tracked.
+        <section style={{ borderTop: "1px solid var(--border)" }}>
+          <div style={{ ...shell, paddingTop: "var(--space-7)",
+            paddingBottom: "var(--space-6)" }}>
+            <h2 style={{ fontSize: "var(--text-xl)", maxWidth: "22ch" }}>
+              Try it on the call you had yesterday.
+            </h2>
+            <p style={{ color: "var(--muted)", marginTop: "var(--space-3)", maxWidth: "52ch",
+              lineHeight: 1.7 }}>
+              Paste the notes in and read what comes back. If none of it is worth approving, you
+              have lost about four minutes and nothing has left the building.
+            </p>
+            <Link href="/onboarding" style={{ ...buttonStyle("primary"), color: "#fff",
+              padding: "10px 18px", marginTop: "var(--space-5)" }}>
+              Start with one call
+            </Link>
           </div>
-        </footer>
+        </section>
       </main>
+
+      <footer style={{ borderTop: "1px solid var(--border)" }}>
+        <div style={{ ...shell, paddingBlock: "var(--space-5)", display: "flex",
+          justifyContent: "space-between", gap: "var(--space-4)", flexWrap: "wrap",
+          alignItems: "baseline" }}>
+          <span style={{ fontWeight: 600, fontSize: "var(--text-base)" }}>ConductFlow</span>
+          <span className="mono" style={{ color: "var(--faint)", fontSize: "var(--text-xs)" }}>
+            for tutors, consultants, coaches and agencies of two to twenty
+          </span>
+        </div>
+      </footer>
     </>
   );
 }
