@@ -210,6 +210,19 @@ button:hover:not(:disabled),
 .cf-row:hover { background: var(--surface-hover); }
 .cf-row:hover .cf-row-go { opacity: 1; transform: translateX(2px); }
 
+/*
+ * The waitlist is the one surface aimed at a stranger rather than at an operator, so its
+ * call to action is the page's brightest thing — white on near-black — instead of the
+ * accent every in-app button uses. The variable exists so the inline style can name a
+ * colour the cascade is allowed to change on hover.
+ */
+:root { --cf-wl-cta-bg: var(--text); }
+.cf-wl-cta:hover:not(:disabled) { --cf-wl-cta-bg: #FFFFFF; }
+
+/* A field that answers focus with more than the ring: the fill lifts as well. */
+.cf-wl-field:hover { background: var(--raised-hover); }
+.cf-wl-field:focus-visible { border-color: var(--border-loud); }
+
 /* Present to the keyboard, out of the way of everyone else, until it is focused. */
 .skip-link {
   position: absolute;
