@@ -14,7 +14,10 @@ console and CLI work. Steps 6–7 are the walkthrough that proves it. Steps 8–
 Verified today, not assumed:
 
 - **Hosted Supabase is at migration `0011`.** The blueprint is owner-only in production and the
-  CHECK constraints are live. No `db push` needed.
+  CHECK constraints are live. **This is now behind local:** `0012_drive_template`,
+  `0013_rate_limit` and `0014_waitlist` exist locally and have not been pushed. All three are
+  additive. Run `npx supabase db push` before the next production deploy — the waitlist form
+  500s on submit without `waitlist_signup`.
 - **Production is deployed.** Nine deployments on Vercel, the latest minutes ago. The Vercel CLI is
   installed and logged in.
 - **All eight production env vars are set**, including `CRON_SECRET` and `AI_GATEWAY_API_KEY`. The
@@ -167,8 +170,9 @@ minutes before assuming you typed it wrong.
 
 ## 4. Browser API key for the Drive Picker
 
-The Drive Picker is being built now: client-side Google Identity Services for the token, plus the
-`gapi` picker for the file chooser. It ships as soon as this console setup exists. It needs two
+The Drive Picker is built (`lib/google/picker.ts`, `components/settings/DriveTemplates.tsx`,
+`app/actions/drive-templates.ts`): client-side Google Identity Services for the token, plus the
+`gapi` picker for the file chooser. It is inert until this console setup exists. It needs two
 public values that the server-side flow does not.
 
 **Why it matters:** `drive.file` grants access **only to files the user has explicitly handed over
@@ -258,11 +262,14 @@ Sign in to production as a real Google account that is on the test-user list, th
 Three separate trips to Google, by design. Each grant is asked for at the moment the capability is
 wanted, never bundled.
 
-**Use the same Google account for all three.** The grant row is keyed
-`unique (org_id, provider, external_account_id)`, and `getAccessToken()` reads it with
-`.maybeSingle()`. Connecting a second Google account to the same org creates a second row and every
-subsequent token fetch fails with a multiple-rows error until one is revoked. This is the single
-easiest way to break the org, and nothing warns you.
+**Prefer the same Google account for all three.** The grant row is keyed
+`unique (org_id, provider, external_account_id)`, so a second Google account creates a second row.
+That used to break the org outright — `getAccessToken()` read with `.maybeSingle()` and no state
+filter, so a second account, or one connected then disconnected (rows are marked `revoked`, never
+deleted), made every Gmail/Calendar/Drive call throw a raw PostgREST error. Fixed:
+`resolveGrant()` in `lib/google/tokens.ts` now picks the newest `active` grant that holds the
+required scope. Still use one account — scopes accumulate on a single row (below), and splitting
+them across accounts means whichever row is newest decides what works.
 
 Scopes accumulate rather than replace: `startConnect()` sends `include_granted_scopes=true`, so after
 the third connection Google returns all three scopes and the row's `scopes` array holds all three.
@@ -383,13 +390,14 @@ support, which Google does not offer.
 **Test-mode refresh tokens die after 7 days.** Covered in §2.4. Fixed only by publishing and passing
 verification.
 
-**Multi-account orgs break token lookup.** Covered in §6. One Google account per org until
-`getAccessToken()` stops using `.maybeSingle()`.
-
 Genuinely unrelated to Google, and still open:
 
 - Multi-user orgs: invites, member management, task owner as a real `app_user`.
-- Rate limiting on the four LLM-triggering actions. No limiter module exists.
+- `regenerateDraftFor()` in `lib/drafts/regenerate.ts` never calls `contextForOrg`, so hitting
+  regenerate silently drops the Drive template and Calendar context the ingest-time draft had.
+  Directly undoes §7.4 and §7.5 for any redrafted commitment.
+- Waitlist signups have no rate limiting — `lib/limits/rate-limit.ts` keys on `org_id` and a
+  stranger has no org. Honeypot, unique email index and length caps only.
 - Unbounded full-table reads on the ingest path (`lib/ingest/run.ts`).
 - KEK rotation: `kek_version` and a `DATA_SOURCE_KEK_PREVIOUS` fallback exist, but no `rewrap()` job
   does, so 3A done-criterion 8 is still unmet.
