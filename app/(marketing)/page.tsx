@@ -2,8 +2,9 @@ import Link from "next/link";
 import { Badge, buttonStyle, Card, SectionLabel, StatusPill } from "@/components/ui/primitives";
 import { WaitlistHero } from "@/components/waitlist/WaitlistHero";
 import {
-  publishedPartners, publishedTestimonials, PILOT_ORGS, WAITLIST_COUNT,
+  publishedPartners, publishedTestimonials, PILOT_ORGS,
 } from "@/lib/marketing/proof";
+import { waitlistCount } from "@/lib/marketing/waitlist-count";
 import { HARD_PROHIBITED } from "@/lib/agent/blueprint";
 
 /**
@@ -81,7 +82,7 @@ function Rail({ label, children }: { label: string; children: React.ReactNode })
  * then this is the counts and nothing else — which is still proof, and is proof that
  * cannot turn out to be attributed to somebody who never said it.
  */
-function Proof() {
+function Proof({ signupCount }: { signupCount: number }) {
   const testimonials = publishedTestimonials();
   const partners = publishedPartners();
 
@@ -93,7 +94,7 @@ function Proof() {
           justifyContent: "space-between", alignItems: "baseline" }}>
           <SectionLabel>In the pilot now</SectionLabel>
           <p className="mono" style={{ color: "var(--faint)", fontSize: "var(--text-xs)" }}>
-            {PILOT_ORGS}+ organisations · {WAITLIST_COUNT} on the waitlist
+            {PILOT_ORGS}+ organisations · {signupCount} on the waitlist
           </p>
         </div>
 
@@ -131,7 +132,11 @@ function Proof() {
   );
 }
 
-export default function Home() {
+/** Same as /waitlist: static for a minute at a time, so the count is never stale for long. */
+export const revalidate = 60;
+
+export default async function Home() {
+  const signupCount = await waitlistCount();
   return (
     <>
       <header style={{ borderBottom: "1px solid var(--border)" }}>
@@ -149,6 +154,7 @@ export default function Home() {
             thing a stranger can actually do. The argument for the product is still here,
             one scroll down, for the people who want it before they hand over an address. */}
         <WaitlistHero
+          signupCount={signupCount}
           minHeight="calc(100dvh - 57px)"
           footer={
             <a href="#what-it-does" className="cf-cue"
@@ -160,7 +166,7 @@ export default function Home() {
           }
         />
 
-        <Proof />
+        <Proof signupCount={signupCount} />
 
         {/* Copy left, evidence right, and the evidence dropped half a step so the two
             columns don't read as a matched pair. */}

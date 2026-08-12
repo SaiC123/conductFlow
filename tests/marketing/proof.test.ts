@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   TESTIMONIALS, PARTNERS, publishedTestimonials, publishedPartners,
-  CHURN_RESULT, PILOT_ORGS, WAITLIST_COUNT,
+  CHURN_RESULT, PILOT_ORGS, WAITLIST_OFFSITE,
 } from "@/lib/marketing/proof";
 
 describe("published proof", () => {
@@ -38,7 +38,15 @@ describe("published proof", () => {
 
   it("states counts as whole numbers, because they are counts", () => {
     expect(Number.isInteger(PILOT_ORGS)).toBe(true);
-    expect(Number.isInteger(WAITLIST_COUNT)).toBe(true);
-    expect(WAITLIST_COUNT).toBeGreaterThan(0);
+    expect(Number.isInteger(WAITLIST_OFFSITE)).toBe(true);
+  });
+
+  /**
+   * The waitlist figure the page states is a live count plus this. Nothing verifies the
+   * off-site half, which is exactly why it must never quietly become a marketing number:
+   * a signup that cannot be produced on request has not happened.
+   */
+  it("never pads the live waitlist count with signups nobody can produce", () => {
+    expect(WAITLIST_OFFSITE).toBeGreaterThanOrEqual(0);
   });
 });

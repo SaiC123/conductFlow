@@ -63,12 +63,23 @@ export function publishedPartners(): string[] {
  * Figures stated as fact on the home page. Counts, not estimates — each one is either
  * true on the day it is written or it does not belong here.
  *
- * WAITLIST_COUNT is maintained by hand rather than read from `waitlist_signup`, because
- * the table only knows about signups made through this site. Update it when the real
- * number moves.
+ * The waitlist figure is no longer written here. It is `WAITLIST_OFFSITE` plus a live
+ * `select count(*)` through `waitlist_count()` — see lib/marketing/waitlist-count.ts — so
+ * it moves the moment someone signs up instead of whenever this file is next edited.
  */
 export const PILOT_ORGS = 10;
-export const WAITLIST_COUNT = 132;
+
+/**
+ * People who joined the waitlist somewhere other than this site — a form filled at an
+ * event, a reply to an email, a spreadsheet — and who are therefore invisible to
+ * `waitlist_signup`. It is added to the live count.
+ *
+ * Zero until someone can name the real number. This is the one place in the page's proof
+ * where a figure could be inflated without anybody noticing, so it holds only signups that
+ * actually happened and could be produced on request. It is not a floor, a target, or a
+ * nicer-looking starting point.
+ */
+export const WAITLIST_OFFSITE = 0;
 
 /**
  * The headline result, measured across the pilot rather than projected. The qualifier is

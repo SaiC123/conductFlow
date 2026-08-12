@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Countdown } from "@/components/waitlist/Countdown";
 import { WaitlistForm } from "@/components/waitlist/WaitlistForm";
 import { LAUNCH_AT } from "@/lib/waitlist/signup";
-import { CHURN_RESULT, PILOT_ORGS, WAITLIST_COUNT } from "@/lib/marketing/proof";
+import { CHURN_RESULT, PILOT_ORGS } from "@/lib/marketing/proof";
 
 /**
  * The first screen, wherever it is used. It argues for one action and carries nothing
@@ -11,9 +11,13 @@ import { CHURN_RESULT, PILOT_ORGS, WAITLIST_COUNT } from "@/lib/marketing/proof"
  *
  * `minHeight` is a prop because the same hero sits under a header on the home page and
  * alone on /waitlist — the height it should fill is the caller's business, not its own.
+ *
+ * `signupCount` is passed in rather than fetched here for the same reason: both routes
+ * render this, and a component that fetches makes every one of them dynamic whether or not
+ * it wanted to be.
  */
-export function WaitlistHero({ minHeight = "100dvh", footer }: {
-  minHeight?: string; footer?: ReactNode;
+export function WaitlistHero({ minHeight = "100dvh", footer, signupCount }: {
+  minHeight?: string; footer?: ReactNode; signupCount: number;
 }) {
   return (
     <section className="cf-glow" style={{
@@ -97,7 +101,7 @@ export function WaitlistHero({ minHeight = "100dvh", footer }: {
         fontSize: "var(--text-sm)", display: "flex", gap: "var(--space-3)",
         alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
         <span><strong className="tabular" style={{ color: "var(--text)", fontWeight: 600 }}>
-          {WAITLIST_COUNT}
+          {signupCount}
         </strong> already on the waitlist</span>
         <span aria-hidden style={{ color: "var(--border-loud)" }}>·</span>
         <span><strong className="tabular" style={{ color: "var(--text)", fontWeight: 600 }}>

@@ -93,6 +93,21 @@ describe("waitlist_signup", () => {
     expect(error).not.toBeNull();
   });
 
+  it("counts for a signed-out visitor without letting them read the list", async () => {
+    const before = await anon.rpc("waitlist_count");
+    expect(before.error).toBeNull();
+    expect(typeof before.data).toBe("number");
+
+    await anon.from("waitlist_signup").insert({ name: "Ada", email: freshEmail() });
+
+    const after = await anon.rpc("waitlist_count");
+    expect(after.data).toBe(before.data + 1);
+
+    // The whole point of the function: a number is public, the rows are not.
+    const { data } = await anon.from("waitlist_signup").select("email");
+    expect((data ?? []).length).toBe(0);
+  });
+
   it("stores what was signed up, readable only by the server", async () => {
     const email = freshEmail();
     await anon.from("waitlist_signup").insert({ name: "Ada", email, source: "waitlist" });

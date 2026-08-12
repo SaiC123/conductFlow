@@ -1,6 +1,50 @@
 @import "tailwindcss";
 
 /*
+ * Satoshi and Clash Display, both from Fontshare under the ITF Free Font Licence, which
+ * permits commercial use and redistribution as part of a site. Self-hosted from
+ * public/fonts rather than loaded from cdn.fontshare.com: a third-party request on the
+ * critical path is a third party who can be slow, be down, or watch every visitor.
+ *
+ * woff2 only. Every browser that has supported this app for years supports it, and the
+ * .woff and .ttf the foundry also offers are three times the bytes for nobody.
+ *
+ * `swap` because the alternative is invisible text while 25KB arrives. `size-adjust` is
+ * deliberately absent: both faces are close enough to the system stack that the swap does
+ * not shift layout noticeably, and a wrong adjust is worse than none.
+ */
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-400.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-500.woff2") format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-700.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Clash Display";
+  src: url("/fonts/clash-display-400.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Clash Display";
+  src: url("/fonts/clash-display-500.woff2") format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Clash Display";
+  src: url("/fonts/clash-display-600.woff2") format("woff2");
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+
+/*
  * One place where the product's look is decided. Screens compose tokens and the
  * primitives in components/ui; they do not invent colours, spacing, or type sizes.
  *
@@ -59,7 +103,8 @@
   --danger-quiet: rgba(229, 72, 77, 0.10);
   --danger-line: rgba(229, 72, 77, 0.34);
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Satoshi", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Clash Display", var(--font-sans);
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Type scale, 1.25 ratio, capped — an ops tool has no use for hero type past 30px. */
@@ -153,6 +198,17 @@ html, body {
 
 /* 600, not the UA's 700: at these sizes bold reads as shouting rather than as hierarchy. */
 h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.25; margin: 0; font-weight: 600; }
+
+/*
+ * Marketing only, set by app/(marketing)/layout.tsx. Clash Display is a display face: it
+ * earns its keep on a 104px hero and looks like fancy dress on a 15px panel title, so it
+ * never reaches app/(app). Its own drawing is tighter than Satoshi's, hence the extra
+ * negative tracking here rather than in the shared rule above.
+ */
+.cf-marketing h1, .cf-marketing h2, .cf-marketing h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+}
 p { margin: 0; }
 
 .mono {
