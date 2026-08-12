@@ -22,9 +22,9 @@ export async function proposeRecurring(patternKey: string) {
 
   const decision = canExecute("propose_recurring_task", true, await contractFor(db, orgId));
   if (!decision.ok) {
-    throw new Error(decision.reason === "unknown_action" || decision.reason === "prohibited"
-      ? "Your blueprint does not allow recurring suggestions."
-      : "That needs approval first.");
+    throw new Error(decision.reason === "needs_approval"
+      ? "That needs approval first."
+      : "Your blueprint does not allow recurring suggestions.");
   }
 
   const data = await loadOperationsData(orgId);

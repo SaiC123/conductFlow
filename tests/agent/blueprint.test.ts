@@ -44,6 +44,21 @@ describe("blueprintToContract", () => {
     const contract = blueprintToContract(DEFAULT_BLUEPRINT);
     expect(canExecute("wire_the_money", true, contract).reason).toBe("unknown_action");
   });
+
+  it("separates an action the owner turned off from one that does not exist", () => {
+    // Both deny, and both are absent from the contract, so the code cannot tell them apart
+    // by lookup alone. The review screen showed "unknown_action" when an owner set Gmail
+    // drafts to never, which reads as a product bug rather than their own setting.
+    const contract = blueprintToContract({
+      ...DEFAULT_BLUEPRINT,
+      permitted_actions: [],
+      required_approvals: [],
+    });
+    expect(canExecute("push_email_draft", true, contract)).toEqual({
+      ok: false, reason: "turned_off",
+    });
+    expect(canExecute("wire_the_money", true, contract).reason).toBe("unknown_action");
+  });
 });
 
 describe("blueprintToContract re-applies ALWAYS_NEEDS_APPROVAL", () => {

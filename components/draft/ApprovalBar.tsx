@@ -7,6 +7,16 @@ import { buttonStyle } from "@/components/ui/primitives";
 // Not having Google connected is the normal case, not a failure worth interrupting for.
 const SILENT_REASONS = new Set(["missing", "revoked", "no draft to push"]);
 
+// The codes are precise and worth keeping in the audit trail, but a person reading a review
+// screen should not have to know what "skipped_no_recipient" means to act on it.
+const REASON_TEXT: Record<string, string> = {
+  turned_off: "Your blueprint has “place a draft in your Gmail drafts folder” set to never.",
+  needs_approval: "That action needs approval before it can run.",
+  prohibited: "That action is prohibited and cannot be enabled.",
+  unknown_action: "The assistant asked for an action this blueprint does not define.",
+  skipped_no_recipient: "This client has no email address, so there was nowhere to write to.",
+};
+
 export function ApprovalBar({ commitmentId }: { commitmentId: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -95,9 +105,19 @@ export function ApprovalBar({ commitmentId }: { commitmentId: string }) {
           {partial ? (
             <>
               The task was created, but the Gmail draft was not written.{" "}
-              <span className="mono" style={{ color: "var(--muted)" }}>
-                {error.replace("Approved and task created, but the Gmail draft was not written: ", "")}
-              </span>
+              {(() => {
+                const code = error.replace(
+                  "Approved and task created, but the Gmail draft was not written: ", "");
+                const explained = REASON_TEXT[code];
+                return explained ? (
+                  <>
+                    {explained}{" "}
+                    <span className="mono" style={{ color: "var(--faint)" }}>{code}</span>
+                  </>
+                ) : (
+                  <span className="mono" style={{ color: "var(--muted)" }}>{code}</span>
+                );
+              })()}
             </>
           ) : (
             <span className="mono">{error}</span>
