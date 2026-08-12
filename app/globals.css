@@ -1,10 +1,111 @@
 @import "tailwindcss";
 
+/*
+ * One place where the product's look is decided. Screens compose tokens and the
+ * primitives in components/ui; they do not invent colours, spacing, or type sizes.
+ */
 :root {
-  --canvas: #0A0A0B; --surface: #131316; --border: rgba(255,255,255,.08);
-  --text: #EDEDEF; --muted: #9A9AA5; --accent: #6366F1;
-  --danger: #E5484D; --ok: #3FB68B; --warn: #E0A23C;
+  /* Surfaces, darkest to lightest. Three levels is enough depth for an ops tool. */
+  --canvas: #0A0A0B;
+  --surface: #131316;
+  --raised: #1A1A20;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  --text: #EDEDEF;
+  --muted: #9A9AA5;
+  --faint: #6E6E78;
+
+  --accent: #6366F1;
+  --accent-hover: #7C7FF5;
+  --accent-quiet: rgba(99, 102, 241, 0.12);
+
+  --ok: #3FB68B;
+  --ok-quiet: rgba(63, 182, 139, 0.10);
+  --warn: #E0A23C;
+  --warn-quiet: rgba(224, 162, 60, 0.10);
+  --danger: #E5484D;
+  --danger-quiet: rgba(229, 72, 77, 0.10);
+
+  /* Type scale, 1.25 ratio, capped — an ops tool has no use for hero type past 30px. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 15px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 30px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
+
+  /* Fast enough to feel like feedback, not animation. */
+  --motion: 120ms cubic-bezier(0.2, 0, 0.2, 1);
 }
-html, body { background: var(--canvas); color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
-.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  background: var(--canvas);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: var(--text-base);
+  line-height: 1.5;
+  /* Dark text on dark surfaces renders heavy without this. */
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.2; margin: 0; }
+p { margin: 0; }
+
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Numbers that get compared down a column must not jitter. */
+.tabular { font-variant-numeric: tabular-nums; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); }
+
+/*
+ * Keyboard focus is visible everywhere, and never removed. Inline styles cannot express
+ * :focus-visible, which is exactly why this lives here.
+ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+button:not(:disabled) { cursor: pointer; }
+
+::placeholder { color: var(--faint); }
+
+::selection { background: var(--accent-quiet); }
+
+/* Respect the setting; nothing here is load-bearing animation. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes cf-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.75; }
+}

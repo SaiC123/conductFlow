@@ -3,53 +3,65 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { retryExtraction } from "@/app/actions/ingest";
 import type { FailedTranscript } from "@/lib/db/queries";
+import { Card, CardTitle, buttonStyle } from "@/components/ui/primitives";
 
 export function NeedsAttention({ items }: { items: FailedTranscript[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [retrying, setRetrying] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   if (items.length === 0) return null;
 
   return (
-    <section style={{ border: "1px solid #E5484D", borderRadius: 10, padding: 16,
-      background: "rgba(229,72,77,0.06)", marginBottom: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#E5484D",
-        fontWeight: 600, fontSize: 13 }}>
-        <span style={{ width: 8, height: 8, borderRadius: 999, background: "#E5484D" }} />
-        Needs attention
-      </div>
-      <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 8 }}>
-        Extraction failed for {items.length === 1 ? "this transcript" : "these transcripts"}. The
-        text is saved — retrying re-runs extraction against it.
+    <Card tone="danger" style={{ marginBottom: "var(--space-4)" }}>
+      <CardTitle tone="danger" dot>Extraction failed</CardTitle>
+      <p style={{ color: "var(--muted)", marginTop: "var(--space-2)", maxWidth: "68ch" }}>
+        Nothing was lost — the transcript is saved exactly as it arrived. Retrying runs
+        extraction against it again.
       </p>
-      <ul style={{ listStyle: "none", padding: 0, marginTop: 12 }}>
-        {items.map((t) => (
-          <li key={t.id} style={{ display: "flex", justifyContent: "space-between",
-            alignItems: "center", gap: 12, padding: "8px 0" }}>
-            <span>
-              {t.title}
-              <span className="mono" style={{ color: "var(--muted)", fontSize: 12, marginLeft: 8 }}>
-                {t.extraction_error ?? "unknown error"}
+
+      <ul style={{ listStyle: "none", padding: 0, margin: "var(--space-3) 0 0" }}>
+        {items.map((t) => {
+          const busy = isPending && retrying === t.id;
+          return (
+            <li key={t.id} style={{ display: "flex", justifyContent: "space-between",
+              alignItems: "center", gap: "var(--space-4)",
+              padding: "var(--space-3) 0", borderTop: "1px solid var(--border)" }}>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", fontWeight: 500 }}>{t.title}</span>
+                <span className="mono" style={{ display: "block", color: "var(--faint)",
+                  fontSize: "var(--text-xs)", marginTop: "var(--space-1)",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {t.extraction_error ?? "unknown error"}
+                </span>
               </span>
-            </span>
-            <button
-              disabled={isPending}
-              onClick={() => {
-                setError(null);
-                startTransition(async () => {
-                  try { await retryExtraction(t.id); router.refresh(); }
-                  catch (e) { setError(e instanceof Error ? e.message : "Retry failed."); }
-                });
-              }}
-              style={{ background: "transparent", color: "var(--text)", padding: "6px 14px",
-                borderRadius: 8, border: "1px solid var(--border)",
-                opacity: isPending ? 0.6 : 1, cursor: isPending ? "not-allowed" : "pointer" }}>
-              Retry
-            </button>
-          </li>
-        ))}
+              <button
+                disabled={isPending}
+                aria-busy={busy}
+                onClick={() => {
+                  setError(null);
+                  setRetrying(t.id);
+                  startTransition(async () => {
+                    try { await retryExtraction(t.id); router.refresh(); }
+                    catch (e) { setError(e instanceof Error ? e.message : "Retry failed."); }
+                  });
+                }}
+                // Fixed width so the label can change without the row reflowing.
+                style={{ ...buttonStyle("secondary", isPending), minWidth: 92,
+                  justifyContent: "center", flexShrink: 0 }}>
+                {busy ? "Retrying…" : "Retry"}
+              </button>
+            </li>
+          );
+        })}
       </ul>
-      {error && <div className="mono" style={{ color: "#E5484D", fontSize: 13 }}>{error}</div>}
-    </section>
+
+      {error && (
+        <p role="alert" style={{ color: "var(--danger)", marginTop: "var(--space-3)" }}>
+          That retry did not go through.{" "}
+          <span className="mono" style={{ color: "var(--muted)" }}>{error}</span>
+        </p>
+      )}
+    </Card>
   );
 }

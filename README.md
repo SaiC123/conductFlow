@@ -92,6 +92,27 @@ never stored. A transcript is persisted before the model runs, so a failed extra
 keeps what was said — `/queue` lists it under **Needs attention** with a Retry that
 re-runs extraction against the saved text.
 
+## Design system
+
+Screens compose tokens and primitives; they do not invent colours, type sizes, or spacing.
+
+- `app/globals.css` — the tokens. Three surface levels (`--canvas`, `--surface`, `--raised`),
+  a 1.25 type scale capped at 30px, spacing and radius scales, motion timing, and the global
+  `:focus-visible` ring. That ring lives here because inline styles cannot express focus
+  states, which is how it went missing everywhere before.
+- `components/ui/primitives.tsx` — `PageHeader`, `Card`, `CardTitle`, `Badge`, `StatusPill`,
+  `EmptyState`, `Skeleton`, `buttonStyle`, `fieldStyle`, `labelStyle`, `proseStyle`.
+
+Rules that hold across every screen:
+
+- **Status is never colour alone.** A dot always ships with its text label, so the UI
+  survives a monochrome screen and a colour-blind reader.
+- **Empty states carry the next action.** A new customer's first view of most screens is the
+  empty one; "no data" teaches them nothing.
+- **Async controls reserve their width** and set `aria-busy`, so a label swapping to
+  "Saving…" cannot shift the layout under a cursor.
+- Dark, high-contrast, serious. The product handles client commitments; trust is the sell.
+
 ## Test
 
 `npm test` — 201 tests, no API key, no network, and no Google credentials required. Google

@@ -1,25 +1,33 @@
 import Link from "next/link";
 import { getCurrentOrgId, listClients } from "@/lib/db/queries";
 import { IngestForm } from "@/components/ingest/IngestForm";
+import { PageHeader, EmptyState, buttonStyle } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
+
+const shell: React.CSSProperties = {
+  maxWidth: 680, margin: "0 auto", padding: "var(--space-6) var(--space-5)",
+};
 
 export default async function IngestPage() {
   const orgId = await getCurrentOrgId();
   if (!orgId) return (
-    <main style={{ maxWidth: 640, margin: "0 auto", padding: "40px 24px" }}>
-      <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Add a transcript</h1>
-      <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>Sign in to add a transcript.</p>
-      <Link href="/onboarding" style={{ color: "var(--accent)" }}>Go to sign in →</Link>
+    <main style={shell}>
+      <PageHeader title="Add a conversation" />
+      <EmptyState
+        title="Sign in to add a conversation"
+        body="Paste the notes from a client call and ConductFlow finds the promises inside it."
+        action={<Link href="/onboarding" style={buttonStyle("primary")}>Sign in</Link>}
+      />
     </main>);
 
   const clients = await listClients(orgId);
   return (
-    <main style={{ maxWidth: 640, margin: "0 auto", padding: "40px 24px" }}>
-      <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Add a transcript</h1>
-      <p style={{ color: "var(--muted)", margin: "6px 0 8px" }}>
-        Paste or upload a client conversation. ConductFlow extracts the promises for you to review.
-      </p>
+    <main style={shell}>
+      <PageHeader
+        title="Add a conversation"
+        lede="Paste your notes or upload a transcript. ConductFlow pulls out every promise that was made, quotes the words it came from, and drafts a follow-up for each — all waiting in your queue."
+      />
       <IngestForm clients={clients} />
     </main>
   );

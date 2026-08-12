@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateBlueprint } from "@/app/actions/blueprint";
 import { HARD_PROHIBITED, ALWAYS_NEEDS_APPROVAL } from "@/lib/agent/blueprint";
+import { Card, CardTitle, Badge, buttonStyle, fieldStyle } from "@/components/ui/primitives";
 
 const DESCRIPTIONS: Record<string, string> = {
   draft_recap: "Write a recap of what was said",
@@ -14,6 +15,24 @@ const DESCRIPTIONS: Record<string, string> = {
   edit_crm: "Update a client record",
 };
 
+/** Plain English for limits enforced in code. Same wording as the landing page. */
+const NEVER: Record<string, string> = {
+  send_external_email: "Send an email to anyone",
+  change_scope: "Change what was agreed",
+  change_pricing: "Change a price",
+  sign_contract: "Sign anything",
+  take_payment: "Take a payment",
+  delete_record: "Delete a record",
+};
+
+type Setting = "off" | "approval" | "unattended";
+
+const CHOICES: { value: Setting; label: string; hint: string }[] = [
+  { value: "off", label: "Never", hint: "The assistant will not do this at all." },
+  { value: "approval", label: "Ask me first", hint: "It prepares it; nothing happens until you approve." },
+  { value: "unattended", label: "On its own", hint: "It does this without stopping to ask." },
+];
+
 export interface BlueprintView {
   version: number;
   permitted: string[];
@@ -24,111 +43,220 @@ export interface BlueprintView {
   canEdit: boolean;
 }
 
-const field: React.CSSProperties = {
-  background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)",
-  borderRadius: 8, padding: "8px 10px",
-};
-
 export function BlueprintEditor({ view }: { view: BlueprintView }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<number | null>(null);
 
-  function settingFor(action: string) {
-    if (view.permitted.includes(action)) return "unattended";
-    if (view.gated.includes(action)) return "approval";
-    return "off";
-  }
+  const [settings, setSettings] = useState<Record<string, Setting>>(() => {
+    const initial: Record<string, Setting> = {};
+    for (const action of view.editable) {
+      initial[action] = view.permitted.includes(action) ? "unattended"
+        : view.gated.includes(action) ? "approval" : "off";
+    }
+    return initial;
+  });
+
+  // Live counts: an owner should be able to see the shape of their blueprint without
+  // reading every row, and see it change as they edit.
+  const unattended = Object.values(settings).filter((s) => s === "unattended").length;
+  const asks = Object.values(settings).filter((s) => s === "approval").length;
+  const off = Object.values(settings).filter((s) => s === "off").length;
 
   return (
     <form
       action={(fd) => {
-        setError(null); setSaved(false);
+        setError(null); setSaved(null);
         startTransition(async () => {
-          try { await updateBlueprint(fd); setSaved(true); router.refresh(); }
-          catch (e) { setError(e instanceof Error ? e.message : "That change was refused."); }
+          try {
+            await updateBlueprint(fd);
+            setSaved(view.version + 1);
+            router.refresh();
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "That change was refused.");
+          }
         });
       }}
     >
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ color: "var(--muted)", textAlign: "left" }}>
-            <th style={{ padding: "8px 0", fontWeight: 500 }}>The assistant may…</th>
-            <th style={{ padding: "8px 0", fontWeight: 500, width: 320 }}>When</th>
-          </tr>
-        </thead>
-        <tbody>
-          {view.editable.map((action) => {
-            const locked = (ALWAYS_NEEDS_APPROVAL as readonly string[]).includes(action);
-            return (
-              <tr key={action} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={{ padding: "10px 0" }}>
-                  {DESCRIPTIONS[action] ?? action}
-                  <div className="mono" style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>
-                    {action}
-                  </div>
-                </td>
-                <td style={{ padding: "10px 0" }}>
-                  <select name={`action:${action}`} defaultValue={settingFor(action)}
-                    disabled={!view.canEdit || isPending} style={{ ...field, width: "100%" }}>
-                    <option value="off">Never</option>
-                    <option value="approval">Only after I approve</option>
-                    {/* Locked rather than hidden: an owner should see that the option exists
-                        and that the product refuses it, not wonder where it went. */}
-                    <option value="unattended" disabled={locked}>
-                      On its own{locked ? " — not available, this reaches someone outside the team" : ""}
-                    </option>
-                  </select>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      <div style={{ display: "flex", gap: 16, marginTop: 20, flexWrap: "wrap" }}>
-        <label style={{ fontSize: 13, color: "var(--muted)" }}>
-          Success metric
-          <input name="successMetric" defaultValue={view.successMetric}
-            disabled={!view.canEdit || isPending}
-            style={{ ...field, display: "block", marginTop: 6, minWidth: 280 }} />
-        </label>
-        <label style={{ fontSize: 13, color: "var(--muted)" }}>
-          Permission expires after (minutes)
-          <input name="expiresInMinutes" type="number" min={1} max={1440}
-            defaultValue={view.expiresInMinutes} disabled={!view.canEdit || isPending}
-            className="mono" style={{ ...field, display: "block", marginTop: 6, width: 120 }} />
-        </label>
+      <div className="mono" style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap",
+        color: "var(--faint)", fontSize: "var(--text-xs)", marginBottom: "var(--space-4)" }}>
+        <span>{unattended} on its own</span>
+        <span>{asks} ask first</span>
+        <span>{off} never</span>
       </div>
 
-      <section style={{ marginTop: 24, border: "1px solid var(--border)", borderRadius: 10,
-        padding: 16, background: "var(--surface)" }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>Never, under any setting</div>
-        <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-          These are fixed in the product. No setting on this page, and no edit to the
-          database, can turn them on.
-        </p>
-        <div className="mono" style={{ color: "var(--muted)", fontSize: 12, marginTop: 8 }}>
-          {HARD_PROHIBITED.join(" · ")}
+      <ul style={{ listStyle: "none", padding: 0, margin: 0,
+        display: "grid", gap: "var(--space-2)" }}>
+        {view.editable.map((action) => {
+          const locked = (ALWAYS_NEEDS_APPROVAL as readonly string[]).includes(action);
+          const current = settings[action];
+          return (
+            <li key={action}>
+              <div style={{
+                border: "1px solid var(--border)", borderRadius: "var(--radius)",
+                background: "var(--surface)", padding: "var(--space-3) var(--space-4)",
+                minWidth: 0,
+                // The rule reads the row's answer before any text does.
+                borderLeft: `3px solid ${current === "unattended" ? "var(--accent)"
+                  : current === "approval" ? "var(--border-strong)" : "transparent"}`,
+              }}>
+                <div style={{ display: "grid", gap: "var(--space-3)",
+                  gridTemplateColumns: "minmax(200px, 1fr) auto", alignItems: "center" }}>
+                  <div id={`bp-${action}`}>
+                    <span style={{ display: "block" }}>{DESCRIPTIONS[action] ?? action}</span>
+                    <span className="mono" style={{ display: "block", color: "var(--faint)",
+                      fontSize: "var(--text-xs)", marginTop: 2 }}>
+                      {action}
+                    </span>
+                  </div>
+
+                  <div role="radiogroup" aria-labelledby={`bp-${action}`}
+                    style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap",
+                      justifyContent: "flex-end" }}>
+                    {CHOICES.map((choice) => {
+                      const disabled = choice.value === "unattended" && locked;
+                      return (
+                        <label key={choice.value}
+                          title={disabled
+                            ? "Not available: this reaches someone outside your team"
+                            : choice.hint}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: "var(--space-2)",
+                            fontSize: "var(--text-sm)",
+                            color: disabled ? "var(--faint)"
+                              : current === choice.value ? "var(--text)" : "var(--muted)",
+                            cursor: disabled || !view.canEdit ? "not-allowed" : "pointer",
+                          }}>
+                          <input
+                            type="radio"
+                            name={`action:${action}`}
+                            value={choice.value}
+                            checked={current === choice.value}
+                            disabled={disabled || !view.canEdit || isPending}
+                            onChange={() => setSettings((s) => ({ ...s, [action]: choice.value }))}
+                            // Native control keeps arrow-key navigation and its own focus ring.
+                            style={{ accentColor: "var(--accent)", margin: 0 }}
+                          />
+                          {choice.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {locked && (
+                  <p style={{ color: "var(--faint)", fontSize: "var(--text-xs)",
+                    marginTop: "var(--space-2)" }}>
+                    Reaches someone outside your team, so &ldquo;on its own&rdquo; is not offered.
+                  </p>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {/*
+        The reassurance the product is sold on, given the weight of a section rather than a
+        footnote: named in plain English, with the machine name underneath, and stated as
+        something no setting reaches.
+      */}
+      <section style={{ marginTop: "var(--space-6)", border: "1px solid var(--border-strong)",
+        borderLeft: "3px solid var(--danger)", borderRadius: "var(--radius)",
+        background: "var(--raised)", padding: "var(--space-4)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+          gap: "var(--space-3)", flexWrap: "wrap" }}>
+          <CardTitle>Never, under any setting</CardTitle>
+          <Badge tone="danger">enforced in code</Badge>
         </div>
+        <p style={{ color: "var(--muted)", marginTop: "var(--space-2)", maxWidth: "62ch" }}>
+          These are not switches that happen to be off. There is no setting on this page, and
+          no edit to the database, that turns them on.
+        </p>
+        <ul style={{ listStyle: "none", padding: 0, margin: "var(--space-4) 0 0",
+          display: "grid", gap: "var(--space-2)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+          {HARD_PROHIBITED.map((action) => (
+            <li key={action} style={{ display: "flex", alignItems: "baseline",
+              gap: "var(--space-3)", border: "1px solid var(--border)",
+              borderRadius: "var(--radius-sm)", padding: "var(--space-3)",
+              background: "var(--canvas)" }}>
+              <span aria-hidden className="mono" style={{ color: "var(--danger)",
+                fontSize: "var(--text-sm)" }}>✕</span>
+              <span>
+                {NEVER[action] ?? action}
+                <span className="mono" style={{ display: "block", color: "var(--faint)",
+                  fontSize: "var(--text-xs)", marginTop: 2 }}>{action}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       </section>
 
-      {view.canEdit && (
-        <button type="submit" disabled={isPending}
-          style={{ marginTop: 20, background: "var(--accent)", color: "#fff", padding: "9px 18px",
-            borderRadius: 8, border: 0, fontWeight: 600,
-            opacity: isPending ? 0.6 : 1, cursor: isPending ? "not-allowed" : "pointer" }}>
-          {isPending ? "Saving…" : "Save blueprint"}
-        </button>
-      )}
-      {!view.canEdit && (
-        <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 20 }}>
-          Only an owner can change these.
+      <section style={{ marginTop: "var(--space-6)" }}>
+        <h2 style={{ fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "0.08em",
+          textTransform: "uppercase", color: "var(--muted)" }}>
+          Operating limits
+        </h2>
+        <Card style={{ marginTop: "var(--space-3)" }}>
+          <div style={{ display: "grid", gap: "var(--space-4)",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+            <label style={{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>
+              What counts as success
+              <input name="successMetric" defaultValue={view.successMetric}
+                disabled={!view.canEdit || isPending} style={fieldStyle} />
+              <span style={{ display: "block", color: "var(--faint)",
+                fontSize: "var(--text-xs)", marginTop: "var(--space-2)" }}>
+                The outcome the assistant is measured against.
+              </span>
+            </label>
+            <label style={{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>
+              Permission expires after
+              <input name="expiresInMinutes" type="number" min={1} max={1440}
+                defaultValue={view.expiresInMinutes} disabled={!view.canEdit || isPending}
+                className="mono" style={fieldStyle} />
+              <span style={{ display: "block", color: "var(--faint)",
+                fontSize: "var(--text-xs)", marginTop: "var(--space-2)" }}>
+                Minutes before a granted permission has to be re-established. 1–1440.
+              </span>
+            </label>
+          </div>
+        </Card>
+      </section>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)",
+        flexWrap: "wrap", marginTop: "var(--space-5)" }}>
+        {view.canEdit ? (
+          <>
+            <button type="submit" disabled={isPending} aria-busy={isPending}
+              // Reserved width: the label changes while saving and must not resize.
+              style={{ ...buttonStyle("primary", isPending), minWidth: 148,
+                justifyContent: "center" }}>
+              {isPending ? "Saving…" : "Save blueprint"}
+            </button>
+            <span style={{ color: "var(--muted)", fontSize: "var(--text-sm)" }}>
+              Saved as a new version. The previous one stays on the record.
+            </span>
+          </>
+        ) : (
+          <p style={{ color: "var(--muted)" }}>
+            Only an owner can change these. You can read every setting here.
+          </p>
+        )}
+      </div>
+
+      {saved !== null && (
+        <p style={{ color: "var(--ok)", marginTop: "var(--space-3)" }}>
+          Saved as version {saved}.
         </p>
       )}
-      {saved && <span style={{ color: "var(--ok)", fontSize: 13, marginLeft: 12 }}>Saved as version {view.version + 1}.</span>}
-      {error && <div className="mono" style={{ color: "var(--danger)", fontSize: 13, marginTop: 12 }}>{error}</div>}
+      {error && (
+        <p role="alert" style={{ color: "var(--danger)", marginTop: "var(--space-3)" }}>
+          That change was refused.{" "}
+          <span className="mono" style={{ color: "var(--muted)" }}>{error}</span>
+        </p>
+      )}
     </form>
   );
 }

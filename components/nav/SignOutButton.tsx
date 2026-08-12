@@ -1,6 +1,7 @@
 "use client";
 import { useTransition } from "react";
 import { signOut } from "@/app/actions/auth";
+import { buttonStyle } from "@/components/ui/primitives";
 
 export function SignOutButton() {
   const [isPending, startTransition] = useTransition();
@@ -8,10 +9,8 @@ export function SignOutButton() {
   return (
     <form action={() => startTransition(async () => { await signOut(); })}>
       <button type="submit" disabled={isPending}
-        style={{ background: "transparent", color: "var(--muted)",
-          border: "1px solid var(--border)", borderRadius: 8, padding: "5px 10px",
-          fontSize: 12, opacity: isPending ? 0.6 : 1,
-          cursor: isPending ? "not-allowed" : "pointer" }}>
+        style={{ ...buttonStyle("ghost", isPending), fontSize: "var(--text-sm)",
+          padding: "5px 10px" }}>
         {isPending ? "Signing out…" : "Sign out"}
       </button>
     </form>

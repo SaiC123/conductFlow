@@ -1,16 +1,56 @@
 import type { DeliverableDraft } from "@/lib/types";
+import { Badge, proseStyle } from "@/components/ui/primitives";
+
+/**
+ * The artifact under review. It gets an accent rail and its own surface so there is never
+ * a question about which words on this page were written by a machine.
+ */
 export function DraftSurface({ draft, provenance }:
   { draft: DeliverableDraft | null; provenance: string[] }) {
-  return (<section style={{ borderLeft: "3px solid var(--accent)", background: "var(--surface)",
-    borderRadius: 10, padding: 20, marginTop: 20 }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <span style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>Drafted by ConductFlow</span>
-      <span style={{ fontSize: 12, color: "var(--muted)" }}>Never auto-sends — review required</span>
-    </div>
-    {draft?.subject && <div style={{ fontWeight: 600, marginTop: 12 }}>{draft.subject}</div>}
-    <p style={{ marginTop: 8, whiteSpace: "pre-wrap", color: "var(--text)" }}>
-      {draft?.body ?? "No draft for this commitment. Drafts are written during ingest; this one's draft call did not succeed. Approving still creates the task."}</p>
-    <div className="mono" style={{ marginTop: 16, fontSize: 12, color: "var(--muted)" }}>
-      Read: {provenance.join(" · ")}</div>
-  </section>);
+  return (
+    <section style={{
+      background: "var(--surface)",
+      border: "1px solid var(--border)",
+      borderLeft: "3px solid var(--accent)",
+      borderRadius: "var(--radius)",
+      marginTop: "var(--space-4)",
+    }}>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: "var(--space-3)", flexWrap: "wrap",
+        padding: "var(--space-3) var(--space-4)",
+        borderBottom: "1px solid var(--border)" }}>
+        <span style={{ color: "var(--accent)", fontWeight: 600,
+          fontSize: "var(--text-sm)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+          Drafted by ConductFlow
+        </span>
+        <Badge tone="neutral" title="ConductFlow has no ability to send mail at all">
+          never auto-sends
+        </Badge>
+      </header>
+
+      <div style={{ padding: "var(--space-4)" }}>
+        {draft ? (
+          <>
+            {draft.subject && (
+              <div style={{ fontSize: "var(--text-md)", fontWeight: 600,
+                marginBottom: "var(--space-3)" }}>
+                {draft.subject}
+              </div>
+            )}
+            <p style={{ ...proseStyle, whiteSpace: "pre-wrap" }}>{draft.body}</p>
+          </>
+        ) : (
+          <p style={{ ...proseStyle, color: "var(--muted)" }}>
+            No draft for this commitment. Drafts are written during ingest; this one&apos;s
+            draft call did not succeed. Approving still creates the task.
+          </p>
+        )}
+      </div>
+
+      <footer className="mono" style={{ color: "var(--faint)", fontSize: "var(--text-xs)",
+        padding: "var(--space-3) var(--space-4)", borderTop: "1px solid var(--border)" }}>
+        read: {provenance.join(" · ")}
+      </footer>
+    </section>
+  );
 }

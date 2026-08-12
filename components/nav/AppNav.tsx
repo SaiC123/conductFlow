@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "./SignOutButton";
+import { buttonStyle } from "@/components/ui/primitives";
 
 export interface NavItem {
   href: string;
@@ -41,30 +42,32 @@ export function AppNav({ email }: { email: string | null }) {
   return (
     <nav aria-label="Main" style={{ borderBottom: "1px solid var(--border)",
       background: "var(--surface)" }}>
-      <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 24px", display: "flex",
-        alignItems: "center", justifyContent: "space-between", gap: 16, minHeight: 52 }}>
+      <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 var(--space-5)",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: "var(--space-4)", minHeight: 52 }}>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 24, minWidth: 0 }}>
-          <Link href="/queue" style={{ color: "var(--text)", textDecoration: "none",
-            fontWeight: 600, fontSize: 14, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-5)", minWidth: 0 }}>
+          <Link href="/queue" style={{ color: "var(--text)", fontWeight: 600,
+            fontSize: "var(--text-md)", letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
             ConductFlow
           </Link>
 
-          <ul style={{ display: "flex", listStyle: "none", padding: 0, margin: 0, gap: 4 }}>
+          <ul style={{ display: "flex", listStyle: "none", padding: 0, margin: 0, gap: 2 }}>
             {items.map((item) => (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   aria-current={item.isCurrent ? "page" : undefined}
                   style={{
-                    display: "block", padding: "16px 10px 14px", fontSize: 13,
-                    textDecoration: "none", whiteSpace: "nowrap",
+                    display: "block", padding: "16px 10px 14px", fontSize: "var(--text-base)",
+                    whiteSpace: "nowrap",
                     color: item.isCurrent ? "var(--text)" : "var(--muted)",
                     // Weight and the underline carry the state as well as colour does,
                     // so it survives a monochrome screen or a colour-blind reader.
                     fontWeight: item.isCurrent ? 600 : 400,
                     borderBottom: item.isCurrent
                       ? "2px solid var(--accent)" : "2px solid transparent",
+                    transition: "color var(--motion), border-color var(--motion)",
                   }}>
                   {item.label}
                 </Link>
@@ -73,10 +76,8 @@ export function AppNav({ email }: { email: string | null }) {
           </ul>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <Link href="/ingest" style={{ background: "var(--accent)", color: "#fff",
-            padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-            textDecoration: "none", whiteSpace: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", minWidth: 0 }}>
+          <Link href="/ingest" style={{ ...buttonStyle("primary"), color: "#fff" }}>
             Add transcript
           </Link>
           {email && (

@@ -4,16 +4,24 @@ import { getServerClient } from "@/lib/db/server";
 import { loadBlueprint } from "@/lib/agent/blueprint-store";
 import { EDITABLE_ACTIONS } from "@/lib/agent/blueprint";
 import { BlueprintEditor } from "@/components/settings/BlueprintEditor";
+import { PageHeader, Badge, EmptyState, buttonStyle } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
+
+const shell: React.CSSProperties = {
+  maxWidth: 800, margin: "0 auto", padding: "var(--space-6) var(--space-5)",
+};
 
 export default async function BlueprintPage() {
   const orgId = await getCurrentOrgId();
   if (!orgId) return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: "40px 24px" }}>
-      <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Agent blueprint</h1>
-      <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>Sign in to see the blueprint.</p>
-      <Link href="/onboarding" style={{ color: "var(--accent)" }}>Go to sign in →</Link>
+    <main style={shell}>
+      <PageHeader title="Agent blueprint" />
+      <EmptyState
+        title="Sign in to read the blueprint"
+        body="It sets out exactly what the assistant may do on your behalf, and what it can never do."
+        action={<Link href="/onboarding" style={buttonStyle("primary")}>Sign in</Link>}
+      />
     </main>);
 
   const db = await getServerClient();
@@ -22,20 +30,22 @@ export default async function BlueprintPage() {
     .select("role").eq("org_id", orgId).eq("user_id", auth.data.user?.id ?? "").maybeSingle();
 
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: "40px 24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Agent blueprint</h1>
-        <Link href="/settings" style={{ color: "var(--accent)", fontSize: 14 }}>← Settings</Link>
+    <main style={shell}>
+      <Link href="/settings" style={{ color: "var(--muted)", fontSize: "var(--text-sm)" }}>
+        ← Settings
+      </Link>
+
+      <div style={{ marginTop: "var(--space-3)" }}>
+        <PageHeader
+          title="Agent blueprint"
+          lede="Exactly what the assistant is allowed to do on your behalf. Every change is saved as a new version, so what it was permitted to do on any given day stays answerable."
+          actions={
+            <Badge tone={blueprint.version === 0 ? "neutral" : "accent"}>
+              {blueprint.version === 0 ? "shipped defaults" : `version ${blueprint.version}`}
+            </Badge>
+          }
+        />
       </div>
-      <p style={{ color: "var(--muted)", margin: "6px 0 4px" }}>
-        Exactly what the assistant is allowed to do on your behalf. Every change is saved as a
-        new version, so what it was permitted to do on any given day stays answerable.
-      </p>
-      <p className="mono" style={{ color: "var(--muted)", fontSize: 12, marginBottom: 24 }}>
-        {blueprint.version === 0
-          ? "using the shipped defaults — never edited"
-          : `version ${blueprint.version}`}
-      </p>
 
       <BlueprintEditor view={{
         version: blueprint.version,

@@ -3,6 +3,7 @@ import { getCurrentOrgId } from "@/lib/db/queries";
 import { getServerClient } from "@/lib/db/server";
 import { CAPABILITIES, type Capability } from "@/lib/google/scopes";
 import { ConnectionList } from "@/components/settings/ConnectionList";
+import { PageHeader, Card, CardTitle, EmptyState, buttonStyle } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +12,22 @@ export interface ConnectionRow {
   state: string; created_at: string;
 }
 
+const shell: React.CSSProperties = {
+  maxWidth: 760, margin: "0 auto", padding: "var(--space-6) var(--space-5)",
+};
+
 export default async function SettingsPage({ searchParams }:
   { searchParams: Promise<{ error?: string; connected?: string }> }) {
   const { error, connected } = await searchParams;
   const orgId = await getCurrentOrgId();
   if (!orgId) return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "40px 24px" }}>
-      <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Settings</h1>
-      <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>Sign in to manage connections.</p>
-      <Link href="/onboarding" style={{ color: "var(--accent)" }}>Go to sign in →</Link>
+    <main style={shell}>
+      <PageHeader title="Settings" />
+      <EmptyState
+        title="Sign in to manage connections"
+        body="Google access is granted one capability at a time, and can be revoked here."
+        action={<Link href="/onboarding" style={buttonStyle("primary")}>Sign in</Link>}
+      />
     </main>);
 
   // The view, not the table: it projects no sealed material, and the table itself is
@@ -37,35 +45,57 @@ export default async function SettingsPage({ searchParams }:
   }));
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "40px 24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <h1 style={{ fontSize: 24, letterSpacing: "-0.02em" }}>Settings</h1>
-        <Link href="/queue" style={{ color: "var(--accent)", fontSize: 14 }}>Commitment queue →</Link>
-      </div>
-      <p style={{ color: "var(--muted)", margin: "6px 0 24px" }}>
-        Connect Google one capability at a time. Each asks for the narrowest access that does the
-        job, and you can revoke any of them here.
-      </p>
+    <main style={shell}>
+      <PageHeader
+        title="Settings"
+        lede="Connect Google one capability at a time. Each asks for the narrowest access that does the job, and you can revoke any of them here."
+      />
+
       {connected && (
-        <div style={{ color: "var(--ok)", fontSize: 13, marginBottom: 16 }}>Account connected.</div>
+        <Card tone="ok" style={{ marginBottom: "var(--space-4)" }}>
+          <CardTitle tone="ok" dot>Account connected</CardTitle>
+          <p style={{ color: "var(--muted)", marginTop: "var(--space-2)" }}>
+            The capability you approved is live. Only the scopes Google actually granted are
+            stored — you can see them below.
+          </p>
+        </Card>
       )}
       {error && (
-        <div className="mono" style={{ color: "var(--danger)", fontSize: 13, marginBottom: 16 }}>
-          Google returned: {error}
-        </div>
+        <Card tone="danger" style={{ marginBottom: "var(--space-4)" }}>
+          <CardTitle tone="danger" dot>Google refused that connection</CardTitle>
+          <p className="mono" style={{ color: "var(--muted)", fontSize: "var(--text-sm)",
+            marginTop: "var(--space-2)", wordBreak: "break-word" }}>
+            {error}
+          </p>
+        </Card>
       )}
+
+      <h2 style={{ fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "0.08em",
+        textTransform: "uppercase", color: "var(--muted)", marginBottom: "var(--space-3)" }}>
+        Google capabilities
+      </h2>
       <ConnectionList capabilities={capabilities} connections={rows} />
 
-      <section style={{ marginTop: 32, border: "1px solid var(--border)", borderRadius: 10,
-        padding: 16, background: "var(--surface)" }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>Agent blueprint</div>
-        <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-          What the assistant may do on your behalf, and what it must ask about first.
-        </p>
-        <Link href="/settings/blueprint" style={{ color: "var(--accent)", fontSize: 13 }}>
-          Review the blueprint →
-        </Link>
-      </section>
+      <h2 style={{ fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "0.08em",
+        textTransform: "uppercase", color: "var(--muted)",
+        margin: "var(--space-6) 0 var(--space-3)" }}>
+        Permissions
+      </h2>
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between",
+          alignItems: "flex-start", gap: "var(--space-4)", flexWrap: "wrap" }}>
+          <div>
+            <CardTitle>Agent blueprint</CardTitle>
+            <p style={{ color: "var(--muted)", marginTop: "var(--space-2)", maxWidth: "56ch" }}>
+              Exactly what the assistant may do on your behalf, what it has to ask you about
+              first, and the things it can never do at any setting.
+            </p>
+          </div>
+          <Link href="/settings/blueprint" style={buttonStyle("secondary")}>
+            Review the blueprint
+          </Link>
+        </div>
+      </Card>
     </main>
   );
 }

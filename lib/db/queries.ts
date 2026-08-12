@@ -116,6 +116,8 @@ export async function loadOperationsData(orgId: string): Promise<{
 
 export interface OpenEscalation {
   id: string; kind: string; detail: string;
+  /** 'warn' stops the line; 'info' is advisory. Set by the exception checks (migration 0010). */
+  severity: "info" | "warn";
   conversation_id: string; commitment_id: string | null;
   conversation_title: string; created_at: string;
 }
@@ -124,13 +126,14 @@ export interface OpenEscalation {
 export async function listOpenEscalations(orgId: string): Promise<OpenEscalation[]> {
   const s = await getServerClient();
   const { data } = await s.from("escalation")
-    .select("id,kind,detail,conversation_id,commitment_id,created_at,conversation(title)")
+    .select("id,kind,detail,severity,conversation_id,commitment_id,created_at,conversation(title)")
     .eq("org_id", orgId).eq("state", "open")
     .order("created_at", { ascending: false });
   return (data ?? []).map((r) => ({
     id: r.id as string,
     kind: r.kind as string,
     detail: r.detail as string,
+    severity: (r.severity as "info" | "warn" | undefined) ?? "warn",
     conversation_id: r.conversation_id as string,
     commitment_id: (r.commitment_id as string | null) ?? null,
     conversation_title: (r.conversation as { title?: string } | null)?.title ?? "Untitled conversation",
