@@ -278,3 +278,103 @@ button:hover:not(:disabled),
   0%, 100% { opacity: 0.45; }
   50% { opacity: 0.75; }
 }
+
+/*
+ * Motion on the marketing pages only. The app itself stays still on purpose — an operator
+ * checking a queue twenty times a day does not want the queue to perform — so every rule
+ * below is opt-in by class and none of them are used inside (app).
+ *
+ * All of it is decoration: the global prefers-reduced-motion rule collapses these to
+ * nothing, and the page still reads correctly with every animation removed.
+ */
+@keyframes cf-rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The hero's own pieces, staggered so the eye lands on them in reading order. */
+.cf-rise { animation: cf-rise-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.cf-rise-1 { animation-delay: 60ms; }
+.cf-rise-2 { animation-delay: 130ms; }
+.cf-rise-3 { animation-delay: 200ms; }
+.cf-rise-4 { animation-delay: 280ms; }
+
+/*
+ * Reveal on scroll without a scroll listener. Where view timelines are supported the
+ * browser drives it off the element's own position; where they are not, the @supports
+ * block never applies and the content is simply visible, which is the correct fallback.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .cf-reveal {
+      animation: cf-rise-in linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 26%;
+    }
+  }
+}
+
+/*
+ * A card that answers the pointer. Transform and border only — no shadow, because on a
+ * near-black canvas a shadow is invisible and only costs a repaint.
+ */
+.cf-lift {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color var(--motion), background var(--motion);
+  will-change: transform;
+}
+.cf-lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-loud);
+  background: var(--surface-hover);
+}
+
+/* The cue at the foot of the hero: the arrow keeps moving, the label answers the pointer. */
+@keyframes cf-nudge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}
+.cf-cue { transition: color var(--motion); }
+.cf-cue:hover { color: var(--text); }
+.cf-cue > span[aria-hidden] { animation: cf-nudge 1.8s ease-in-out infinite; display: inline-block; }
+.cf-cue:hover > span[aria-hidden] { animation-duration: 0.9s; }
+
+/*
+ * One slow wash behind the hero, sized in vmax so it scales with the display rather than
+ * sitting as a fixed blob on a large monitor. Pointer-events none: it is scenery.
+ */
+@keyframes cf-drift {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.55; }
+  50% { transform: translate(-50%, -54%) scale(1.12); opacity: 0.8; }
+}
+.cf-glow {
+  position: relative;
+  isolation: isolate;
+  /* `clip`, not `hidden`: it keeps the wash inside the section without turning the
+     section into a scroll container. Scenery must never widen the page — sized in vmax,
+     this ran 240px past the viewport on a phone, because vmax there is the height. */
+  overflow: clip;
+}
+.cf-glow::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: min(90vmax, 100%);
+  height: 60vmax;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(91, 94, 240, 0.13), transparent 70%);
+  animation: cf-drift 14s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* A link whose underline arrives rather than being there the whole time. */
+.cf-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0% 1px;
+  transition: background-size 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cf-underline:hover { background-size: 100% 1px; }

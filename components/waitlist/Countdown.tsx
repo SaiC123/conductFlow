@@ -42,7 +42,7 @@ export function Countdown({ launchAt }: { launchAt: string }) {
         : "Counting down to early access"}
       role="timer"
       style={{ display: "flex", justifyContent: "center", alignItems: "flex-start",
-        gap: "clamp(12px, 4vw, 32px)", marginTop: "var(--space-7)" }}
+        gap: "clamp(12px, 4vw, 32px)", marginTop: "var(--space-6)" }}
     >
       {UNITS.map((unit, i) => (
         <div key={unit} style={{ display: "flex", alignItems: "flex-start",
@@ -55,7 +55,7 @@ export function Countdown({ launchAt }: { launchAt: string }) {
           )}
           <div style={{ textAlign: "center", minWidth: "2ch" }}>
             <div aria-hidden className="tabular" style={{
-              fontSize: "clamp(34px, 9vw, 76px)", fontWeight: 600, lineHeight: 1,
+              fontSize: "clamp(30px, min(7.5vw, 8vh), 76px)", fontWeight: 600, lineHeight: 1,
               letterSpacing: "-0.03em",
               color: left ? "var(--text)" : "var(--border-loud)",
             }}>
