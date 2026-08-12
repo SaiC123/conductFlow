@@ -13,11 +13,14 @@ console and CLI work. Steps 6–7 are the walkthrough that proves it. Steps 8–
 
 Verified today, not assumed:
 
-- **Hosted Supabase is at migration `0011`.** The blueprint is owner-only in production and the
-  CHECK constraints are live. **This is now behind local:** `0012_drive_template`,
-  `0013_rate_limit` and `0014_waitlist` exist locally and have not been pushed. All three are
-  additive. Run `npx supabase db push` before the next production deploy — the waitlist form
-  500s on submit without `waitlist_signup`.
+- **Hosted Supabase is at migration `0014`, level with local.** Verified with
+  `supabase migration list --linked`, not assumed. `0012_drive_template`, `0013_rate_limit` and
+  `0014_waitlist` were pushed on 2026-08-12. The blueprint is owner-only and the CHECK
+  constraints are live.
+- **`supabase db push` must run from the repo root.** Run from anywhere else it fails with
+  `LegacyProjectNotLinkedError: Cannot find project ref` — the link lives in
+  `supabase/.temp/linked-project.json`, so a wrong cwd looks exactly like a broken link. It is
+  not one; `supabase projects list` will show `"linked": true` either way.
 - **Production is deployed.** Nine deployments on Vercel, the latest minutes ago. The Vercel CLI is
   installed and logged in.
 - **All eight production env vars are set**, including `CRON_SECRET` and `AI_GATEWAY_API_KEY`. The
