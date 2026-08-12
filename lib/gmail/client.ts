@@ -74,13 +74,33 @@ function retryAfterFrom(headers: Headers): number | null {
   return Number.isFinite(seconds) ? seconds : null;
 }
 
+/**
+ * Google's own message, when it has one. Guessing at the cause hides real ones: a 403 is
+ * just as often "the Gmail API is not enabled in this project" as it is a missing scope,
+ * and the two need entirely different fixes.
+ */
+function reasonFrom(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body);
+    const message = parsed?.error?.message;
+    return typeof message === "string" && message.length > 0 ? message : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Google reports a withdrawn grant as `invalid_grant` under either 401 or 403. */
 function errorFor(status: number, body: string, headers: Headers): GmailError {
+  const reason = reasonFrom(body);
   if (body.includes("invalid_grant")) {
     return new GmailInvalidGrantError("The Google connection was revoked or expired.", status);
   }
-  if (status === 401) return new GmailUnauthorizedError("Gmail rejected the access token.", status);
-  if (status === 403) return new GmailForbiddenError("The granted scopes do not permit this call.", status);
+  if (status === 401) {
+    return new GmailUnauthorizedError(reason ?? "Gmail rejected the access token.", status);
+  }
+  if (status === 403) {
+    return new GmailForbiddenError(reason ?? "Gmail refused this call.", status);
+  }
   if (status === 429) {
     return new GmailRateLimitError("Gmail is throttling this account.", status, retryAfterFrom(headers));
   }
