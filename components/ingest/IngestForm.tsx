@@ -80,6 +80,18 @@ export function IngestForm({ clients }: { clients: ClientContact[] }) {
             </select>
           )}
         </label>
+        {addingClient && (
+          <label style={labelStyle}>
+            Client email <span style={{ color: "var(--faint)" }}>— optional</span>
+            <input name="newClientEmail" type="email" style={fieldStyle}
+              placeholder="priya@northwind.example" />
+            <span style={{ color: "var(--faint)", fontSize: "var(--text-sm)",
+              fontWeight: 400, marginTop: "var(--space-2)", display: "block" }}>
+              Follow-up drafts are addressed here. Without it, approvals still create tasks,
+              but no Gmail draft is written.
+            </span>
+          </label>
+        )}
         {clients.length > 0 && (
           <button type="button" onClick={() => setAddingClient((v) => !v)}
             style={{ ...buttonStyle("ghost"), height: 24, padding: 0,

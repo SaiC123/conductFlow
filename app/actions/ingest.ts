@@ -26,9 +26,14 @@ export async function ingestTranscript(formData: FormData) {
   let clientId = String(formData.get("clientId") ?? "");
   let clientName = "";
   const newClientName = String(formData.get("newClientName") ?? "").trim();
+  // Optional, and the whole reason follow-up drafts can exist: without an address,
+  // push_email_draft has nowhere to write and every approval reports skipped_no_recipient.
+  // A client added without one still works — it just never produces a Gmail draft.
+  const newClientEmail = String(formData.get("newClientEmail") ?? "").trim();
   if (newClientName) {
     const { data, error } = await db.from("client_contact")
-      .insert({ org_id: orgId, name: newClientName }).select("id,name").single();
+      .insert({ org_id: orgId, name: newClientName, email: newClientEmail || null })
+      .select("id,name").single();
     if (error) throw error;
     clientId = data.id; clientName = data.name;
   } else {
