@@ -21,8 +21,8 @@ export const extractionSchema = z.object({
 });
 
 export const draftSchema = z.object({
-  subject: z.string().min(1),
-  body: z.string().min(1),
+  subject: z.string().min(1).describe("Email subject line. Plain text, no greeting, under 60 characters."),
+  body: z.string().min(1).describe("The message body: two or three sentences, greeting and sign-off included."),
 });
 
 export type ExtractedCommitment = z.infer<typeof commitmentSchema> & {

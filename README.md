@@ -51,12 +51,17 @@ context) is not built — it needs credentials this repo does not have.
 | `/onboarding` | Sign-in (Google stub + dev demo session) |
 | `/ingest` | Paste or upload a transcript; extraction produces reviewable commitments |
 | `/queue` | Commitment queue — confidence chip + status dot per promise, needs-attention strip |
-| `/queue/[commitmentId]` | Draft review: draft surface, provenance, flagged-source banner, approval bar |
+| `/queue/[commitmentId]` | Draft review: draft surface, provenance, flagged-source banner, write/rewrite draft, approval bar |
 | `/tasks` | Task board: open / in progress / delivered, plus the overdue reminder strip |
 | `/dashboard` | Promise risk: overdue, owner+deadline coverage, approved share |
 
 Approving writes an `approval_event`, a `task`, and an `audit_event`, and flips the
 commitment to `tasked`. Discarding writes a `rejected` approval event plus its audit row.
+
+Drafts are written during ingest, one model call per commitment. A draft call can fail on
+its own — free-tier rate limits do it routinely — so the review screen carries **Write the
+draft** for a commitment that has none and **Rewrite draft** to replace one. Generation
+happens before the write, so a failed rewrite leaves the existing draft untouched.
 
 Marking a task delivered stamps who completed it and when, flips its commitment to `done`,
 and resolves the open reminder. Reopening returns the commitment to `tasked`. Nothing here

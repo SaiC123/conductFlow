@@ -1,10 +1,11 @@
-import { generateText, Output, NoObjectGeneratedError, type LanguageModel } from "ai";
+import type { LanguageModel } from "ai";
 import {
   extractionSchema, EXTRACTION_MODEL, MAX_COMMITMENTS, MAX_TRANSCRIPT_CHARS,
   type ExtractedCommitment,
 } from "./schema";
 import { EXTRACTION_SYSTEM_PROMPT, buildExtractionPrompt } from "./prompts";
 import { sanitizeIngested } from "./injection";
+import { generateObjectWithRetry } from "./generate";
 
 export interface ExtractInput {
   transcript: string;
@@ -39,26 +40,13 @@ function resolveDeadline(value: string | null): string | null {
   return roundTrips ? value : null;
 }
 
-/**
- * A model that returns prose instead of JSON is usually fixed by asking again.
- * One retry only — a second failure is a real problem the caller should see.
- */
 async function callWithOneRetry(input: ExtractInput, model?: LanguageModel) {
-  const call = async () => {
-    const { output } = await generateText({
-      model: model ?? EXTRACTION_MODEL,
-      system: EXTRACTION_SYSTEM_PROMPT,
-      prompt: buildExtractionPrompt(input),
-      output: Output.object({ schema: extractionSchema }),
-    });
-    return output;
-  };
-  try {
-    return await call();
-  } catch (e) {
-    if (!NoObjectGeneratedError.isInstance(e)) throw e;
-    return await call();
-  }
+  return generateObjectWithRetry({
+    model: model ?? EXTRACTION_MODEL,
+    system: EXTRACTION_SYSTEM_PROMPT,
+    prompt: buildExtractionPrompt(input),
+    schema: extractionSchema,
+  });
 }
 
 export async function extractCommitments(

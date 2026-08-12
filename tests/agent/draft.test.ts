@@ -37,4 +37,28 @@ describe("generateFollowUpDraft", () => {
     const model = mockReturning({ subject: "Only a subject" });
     await expect(generateFollowUpDraft(input, model)).rejects.toThrow();
   });
+
+  it("retries once when the model returns prose instead of JSON", async () => {
+    let call = 0;
+    const flaky = new MockLanguageModelV4({
+      doGenerate: async () => {
+        call++;
+        const text = call === 1 ? "Sure! Here is a lovely email for you." : JSON.stringify({
+          subject: "Audit findings deck", body: "Confirming the deck lands by the 16th.",
+        });
+        return {
+          content: [{ type: "text" as const, text }],
+          finishReason: { unified: "stop" as const, raw: undefined },
+          usage: {
+            inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 20, text: 20, reasoning: undefined },
+          },
+          warnings: [],
+        };
+      },
+    });
+    const d = await generateFollowUpDraft(input, flaky);
+    expect(call).toBe(2);
+    expect(d.subject).toBe("Audit findings deck");
+  });
 });

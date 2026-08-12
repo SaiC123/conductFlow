@@ -1,6 +1,7 @@
 import { getCommitment, getDraftForCommitment, getTranscriptForCommitment } from "@/lib/db/queries";
 import { DraftSurface } from "@/components/draft/DraftSurface";
 import { ApprovalBar } from "@/components/draft/ApprovalBar";
+import { GenerateDraftButton } from "@/components/draft/GenerateDraftButton";
 export default async function DraftReview({ params }: { params: Promise<{ commitmentId: string }> }) {
   const { commitmentId } = await params;
   const [c, draft, transcript] = await Promise.all([
@@ -31,6 +32,7 @@ export default async function DraftReview({ params }: { params: Promise<{ commit
       </section>
     )}
     <DraftSurface draft={draft} provenance={["transcript", "client record"]} />
+    <GenerateDraftButton commitmentId={c.id} hasDraft={!!draft} />
     <ApprovalBar commitmentId={c.id} />
   </main>);
 }
