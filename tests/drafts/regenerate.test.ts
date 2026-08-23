@@ -93,6 +93,44 @@ describe("regenerateDraftFor", () => {
     }, model)).rejects.toThrow(/not found/i);
   });
 
+  // Regenerating used to skip contextForOrg entirely, so the replacement draft silently lost
+  // the Drive template and Calendar notes the ingest-time one had. These two cover what is
+  // observable without a connected Google account: that the context lookup happens against
+  // the conversation the commitment belongs to, and that an org with nothing connected still
+  // gets a draft. The context contents themselves need a real grant to assert, which no
+  // fixture in this suite has — the ingest path has the same gap.
+  it("prompts with the client and the conversation it came from", async () => {
+    let seen = "";
+    const capturing = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        seen = JSON.stringify(options.prompt);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ subject: "s", body: "b" }) }],
+          finishReason: { unified: "stop" as const, raw: undefined },
+          usage: {
+            inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 1, text: 1, reasoning: undefined },
+          },
+          warnings: [],
+        };
+      },
+    });
+
+    const { data: client } = await db.from("client_contact")
+      .select("name").eq("id", clientA).single();
+    await regenerateDraftFor(db, { commitmentId: withoutDraft }, capturing);
+    expect(seen).toContain(client!.name);
+  });
+
+  it("still writes a draft for an org with no Google account connected", async () => {
+    // contextForOrg never throws, and regenerate must not start doing so on its behalf:
+    // every org is this org until someone visits Settings.
+    const fresh = await makeUndraftedCommitment();
+    await expect(regenerateDraftFor(db, { commitmentId: fresh }, model)).resolves
+      .toMatchObject({ replaced: false });
+    expect(await draftsFor(fresh)).toHaveLength(1);
+  });
+
   it("leaves the old draft in place when the model call fails", async () => {
     const exploding = new MockLanguageModelV4({
       doGenerate: async () => { throw new Error("gateway exploded"); },

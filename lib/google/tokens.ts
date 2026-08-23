@@ -32,6 +32,42 @@ export function aadFor(orgId: string, provider: string, externalAccountId: strin
 
 const EXPIRY_MARGIN_MS = 60_000;
 
+/** The columns every caller needs to open and account for a grant. */
+export interface Grant {
+  id: string; org_id: string; provider: string; external_account_id: string;
+  scopes: string[]; state: string; account_email?: string;
+}
+
+/**
+ * Picks the grant that can actually serve a capability.
+ *
+ * An org holds one row per Google account, and capabilities are consented one at a time,
+ * so a second account is ordinary rather than exceptional — and disconnecting only marks a
+ * row revoked, so the rows outlive the accounts. Asking the database for *the* row instead
+ * of resolving among them is what broke every Google call the moment a second row existed.
+ *
+ * Rows arrive most-recently-updated first, so the newest account that granted the scope
+ * wins when two accounts both granted it.
+ */
+export function resolveGrant<T extends Grant>(rows: T[], requiredScope: string): T {
+  if (rows.length === 0)
+    throw new DataSourceUnavailable("No Google account is connected.", "missing");
+
+  // Asking for a scope the user never granted is a bug in the caller, not a prompt to
+  // re-consent behind their back.
+  const scoped = rows.filter((r) => (r.scopes ?? []).includes(requiredScope));
+  if (scoped.length === 0)
+    throw new DataSourceUnavailable(
+      `The connected account did not grant ${requiredScope}.`, "scope");
+
+  const usable = scoped.find((r) => r.state === "active");
+  if (!usable)
+    throw new DataSourceUnavailable(
+      `The Google connection is ${scoped[0].state}.`, "revoked");
+
+  return usable;
+}
+
 /**
  * Hands a caller a usable Google access token, refreshing when the cached one is close to
  * expiry. Every call is audited: a token whose use cannot be explained to a customer is
@@ -44,18 +80,13 @@ export async function getAccessToken(
 ): Promise<string> {
   const now = deps.now?.() ?? Date.now();
 
-  const { data: row, error } = await db.from("connected_data_source")
+  const { data: rows, error } = await db.from("connected_data_source")
     .select("id,org_id,provider,external_account_id,scopes,state,token_sealed,dek_sealed")
-    .eq("org_id", orgId).eq("provider", "google").maybeSingle();
+    .eq("org_id", orgId).eq("provider", "google")
+    .order("updated_at", { ascending: false });
   if (error) throw error;
-  if (!row) throw new DataSourceUnavailable("No Google account is connected.", "missing");
-  if (row.state !== "active")
-    throw new DataSourceUnavailable(`The Google connection is ${row.state}.`, "revoked");
 
-  // Asking for a scope the user never granted is a bug in the caller, not a prompt to
-  // re-consent behind their back.
-  if (!(row.scopes as string[]).includes(requiredScope))
-    throw new DataSourceUnavailable(`The connected account did not grant ${requiredScope}.`, "scope");
+  const row = resolveGrant(rows ?? [], requiredScope);
 
   await logAudit({
     orgId, actor: "agent", action: "read",
@@ -96,6 +127,26 @@ export async function getAccessToken(
   });
 
   return refreshed.accessToken;
+}
+
+/**
+ * The address a capability will act as, resolved the same way the token is — so the "from"
+ * on a draft can never belong to a different account than the token that writes it.
+ * Returns null rather than throwing: a caller that already degrades gracefully when no
+ * account is connected should not have to catch here too.
+ */
+export async function getConnectedAccountEmail(
+  db: SupabaseClient, orgId: string, requiredScope: string,
+): Promise<string | null> {
+  const { data: rows } = await db.from("connected_data_source")
+    .select("id,org_id,provider,external_account_id,scopes,state,account_email")
+    .eq("org_id", orgId).eq("provider", "google")
+    .order("updated_at", { ascending: false });
+  try {
+    return resolveGrant(rows ?? [], requiredScope).account_email ?? null;
+  } catch {
+    return null;
+  }
 }
 
 type RefreshOutcome =
