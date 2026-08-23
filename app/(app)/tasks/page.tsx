@@ -3,6 +3,8 @@ import {
   getCurrentOrgId, listBoardTasks, listOpenReminders, loadOperationsData,
 } from "@/lib/db/queries";
 import { detectRecurring } from "@/lib/ops/recurring";
+import { listMembers } from "@/lib/orgs/members";
+import { getServerClient } from "@/lib/db/server";
 import { RecurringSuggestions } from "@/components/tasks/RecurringSuggestions";
 import { TaskBoard } from "@/components/tasks/TaskBoard";
 import { ReminderStrip } from "@/components/tasks/ReminderStrip";
@@ -23,8 +25,12 @@ export default async function TasksPage() {
       />
     </main>);
 
-  const [tasks, reminders, opsData] = await Promise.all([
+  // The roster is here because a board is where work gets handed over, and a select with no
+  // names in it is not an assignment control.
+  const db = await getServerClient();
+  const [tasks, reminders, opsData, members] = await Promise.all([
     listBoardTasks(orgId), listOpenReminders(orgId), loadOperationsData(orgId),
+    listMembers(db, orgId),
   ]);
 
   const now = new Date();
@@ -71,7 +77,8 @@ export default async function TasksPage() {
             style={buttonStyle("primary")}>Go to the queue</Link>}
         />
       ) : (
-        <TaskBoard items={tasks} nowIso={now.toISOString()} />
+        <TaskBoard items={tasks} nowIso={now.toISOString()}
+          members={members.map((m) => ({ userId: m.userId, email: m.email }))} />
       )}
 
       <RecurringSuggestions patterns={suggestions} />

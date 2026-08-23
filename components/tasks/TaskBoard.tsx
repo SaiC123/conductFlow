@@ -2,8 +2,10 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setTaskStatus } from "@/app/actions/tasks";
-import { Badge, SectionHeading, StatusPill, buttonStyle } from "@/components/ui/primitives";
+import { assignTask, setTaskStatus } from "@/app/actions/tasks";
+import {
+  Badge, SectionHeading, StatusPill, buttonStyle, fieldStyle,
+} from "@/components/ui/primitives";
 import type { BoardTask } from "@/lib/db/queries";
 import type { TaskStatus } from "@/lib/tasks/transitions";
 
@@ -81,7 +83,23 @@ function sortForColumn(status: TaskStatus, tasks: BoardTask[]): BoardTask[] {
     (a.due ? Date.parse(a.due) : Infinity) - (b.due ? Date.parse(b.due) : Infinity));
 }
 
-export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: string }) {
+export interface BoardMember { userId: string; email: string }
+
+/**
+ * Two different facts about who owes a promise, and the card shows one of them.
+ *
+ * `owner_name` is whatever the transcript called the person — evidence, and often not a name
+ * this workspace knows. `owner_user_id` is a member who has actually been given the task. Once
+ * somebody real holds it, the transcript's word stops being the answer, so the assignee wins.
+ */
+function ownerLabel(t: BoardTask): string | null {
+  if (t.owner_email) return t.owner_email;
+  return t.owner_name ? `${t.owner_name} (as named in the transcript)` : null;
+}
+
+export function TaskBoard({ items, nowIso, members }: {
+  items: BoardTask[]; nowIso: string; members: BoardMember[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [movingId, setMovingId] = useState<string | null>(null);
@@ -90,6 +108,25 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
   // during render disagrees with the server's markup across a day boundary, and React
   // reports a hydration mismatch.
   const now = Date.parse(nowIso);
+
+  function assign(taskId: string, userId: string | null) {
+    setErrors((e) => ({ ...e, [taskId]: "" }));
+    setMovingId(taskId);
+    startTransition(async () => {
+      try {
+        const result = await assignTask(taskId, userId);
+        if (!result.ok) setErrors((prev) => ({ ...prev, [taskId]: result.error }));
+        else router.refresh();
+      } catch (e) {
+        setErrors((prev) => ({
+          ...prev,
+          [taskId]: e instanceof Error ? e.message : "That change did not stick.",
+        }));
+      } finally {
+        setMovingId(null);
+      }
+    });
+  }
 
   function move(taskId: string, next: TaskStatus) {
     setErrors((e) => ({ ...e, [taskId]: "" }));
@@ -173,7 +210,7 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
                             )}
                             {urgency === "today" && <Badge tone="warn">due today</Badge>}
                             {urgency === "undated" && <Badge tone="warn">no date</Badge>}
-                            {!t.owner && <Badge tone="warn">no owner</Badge>}
+                            {!t.owner_user_id && <Badge tone="warn">unassigned</Badge>}
                           </>
                         )}
                       </div>
@@ -181,7 +218,7 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
                       <div style={{ color: "var(--faint)", fontSize: "var(--text-xs)",
                         marginTop: "var(--space-1)", overflow: "hidden",
                         textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {t.client_name}{t.owner ? ` · ${t.owner}` : ""}
+                        {t.client_name}{ownerLabel(t) ? ` · ${ownerLabel(t)}` : ""}
                       </div>
 
                       <div style={{ display: "flex", gap: "var(--space-2)",
@@ -199,6 +236,24 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
                             {pending && m.lead ? "Saving…" : m.label}
                           </button>
                         ))}
+                        {/* Any member may hand a task over; the database refuses a name
+                            from outside the organization. See migration 0020. */}
+                        <label style={{ display: "inline-flex", alignItems: "center",
+                          gap: "var(--space-2)" }}>
+                          <span className="mono" style={{ color: "var(--faint)",
+                            fontSize: "var(--text-xs)" }}>owner</span>
+                          <select value={t.owner_user_id ?? ""} disabled={pending}
+                            aria-label={`Who owns "${t.title}"`}
+                            onChange={(e) => assign(t.id, e.target.value || null)}
+                            style={{ ...fieldStyle, width: "auto", marginTop: 0, height: 26,
+                              padding: "0 6px", fontSize: "var(--text-sm)" }}>
+                            <option value="">Nobody</option>
+                            {members.map((m) => (
+                              <option key={m.userId} value={m.userId}>{m.email}</option>
+                            ))}
+                          </select>
+                        </label>
+
                         <Link href={`/queue/${t.commitment_id}`}
                           style={{ fontSize: "var(--text-sm)", color: "var(--faint)",
                             marginInlineStart: "auto" }}>

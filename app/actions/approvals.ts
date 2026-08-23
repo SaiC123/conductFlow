@@ -37,7 +37,7 @@ export async function approveAndCreateTask(commitmentId: string) {
         subject_id: commitmentId, state: "approved", actor_user_id: uid });
       if (approvalError) throw approvalError;
       const { error: taskError } = await s.from("task").insert({ org_id: c.org_id,
-        commitment_id: commitmentId, title: c.text, owner: c.owner, due: c.deadline });
+        commitment_id: commitmentId, title: c.text, owner_name: c.owner, due: c.deadline });
       if (taskError) throw taskError;
       const { error: updateError } = await s.from("commitment").update({ status: "tasked" })
         .eq("id", commitmentId).eq("org_id", c.org_id);

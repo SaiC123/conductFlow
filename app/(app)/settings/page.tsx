@@ -109,6 +109,21 @@ export default async function SettingsPage({ searchParams }:
       <div style={{ marginTop: "var(--space-7)" }}>
         <SectionHeading>Permissions</SectionHeading>
       </div>
+      <Card style={{ marginBottom: "var(--space-3)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between",
+          alignItems: "flex-start", gap: "var(--space-4)", flexWrap: "wrap" }}>
+          <div>
+            <CardTitle>People</CardTitle>
+            <p style={{ color: "var(--muted)", marginTop: "var(--space-2)", maxWidth: "56ch" }}>
+              Who can see this workspace&rsquo;s conversations, what each of them may do, and
+              the invitations that are still outstanding.
+            </p>
+          </div>
+          <Link href="/settings/members" className="cf-btn" style={buttonStyle("secondary")}>
+            Manage people
+          </Link>
+        </div>
+      </Card>
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between",
           alignItems: "flex-start", gap: "var(--space-4)", flexWrap: "wrap" }}>

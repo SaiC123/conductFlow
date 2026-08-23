@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { requireEnv } from "@/lib/env";
+import { safeNextPath, siteOrigin } from "@/lib/http/origin";
 
 export const dynamic = "force-dynamic";
-
-async function siteOrigin(): Promise<string> {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
-}
 
 /**
  * Sign in by emailed link. A second way in matters because the Google path can be taken away
@@ -28,6 +22,9 @@ export async function POST(request: Request) {
   const origin = await siteOrigin();
   const form = await request.formData();
   const email = String(form.get("email") ?? "").trim();
+  // The invite screen posts this so that opening the emailed link finishes on the invitation
+  // rather than dropping the person into a workspace they have not joined yet.
+  const next = safeNextPath(String(form.get("next") ?? "") || null);
 
   if (!email || !email.includes("@")) {
     return NextResponse.redirect(
@@ -54,7 +51,11 @@ export async function POST(request: Request) {
 
   const { error } = await db.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: `${origin}/auth/callback` },
+    options: {
+      emailRedirectTo: next
+        ? `${origin}/auth/callback?next=${encodeURIComponent(next)}`
+        : `${origin}/auth/callback`,
+    },
   });
 
   // 303 so the browser follows with GET; this handler is reached by a form POST.

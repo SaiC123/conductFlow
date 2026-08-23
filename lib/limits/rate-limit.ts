@@ -49,8 +49,18 @@ export class RateLimited extends Error {
 
 interface ConsumeResult { allowed: boolean; remaining: number; reset_at: string }
 
-async function charge(
-  db: SupabaseClient, orgId: string, rule: LimitRule, now: number,
+/**
+ * Charges one org-keyed window and throws RateLimited if it declines.
+ *
+ * Exported because model spend is no longer the only thing in the product worth bounding —
+ * see lib/limits/invite-limit.ts. Every caller wants the same three properties: the counter
+ * lives in Postgres rather than in one serverless instance's memory, the charge *is* the
+ * conflict update so concurrent callers cannot both read "under the limit", and a signed-in
+ * caller may only spend its own org's allowance. All that differs is the sentence a person
+ * ends up reading, so that is the parameter.
+ */
+export async function chargeOrgBucket(
+  db: SupabaseClient, orgId: string, rule: LimitRule, now: number, message?: string,
 ): Promise<void> {
   const { data, error } = await db.rpc("consume_rate_limit", {
     p_org_id: orgId, p_bucket: rule.bucket, p_window_seconds: rule.windowSeconds,
@@ -67,9 +77,9 @@ async function charge(
   const retryAfter = Math.max(1,
     Math.ceil((new Date(result.reset_at).getTime() - now) / 1000));
   throw new RateLimited(
-    rule.windowSeconds >= DAY
+    message ?? (rule.windowSeconds >= DAY
       ? "This organization has used its model budget for today."
-      : "That is happening too quickly. Try again in a moment.",
+      : "That is happening too quickly. Try again in a moment."),
     retryAfter, rule.bucket);
 }
 
@@ -85,8 +95,8 @@ async function charge(
 export async function consumeLlmBudget(
   db: SupabaseClient, orgId: string, action: LlmAction, now = Date.now(),
 ): Promise<void> {
-  await charge(db, orgId, BURST[action], now);
-  await charge(db, orgId, DAILY[action], now);
+  await chargeOrgBucket(db, orgId, BURST[action], now);
+  await chargeOrgBucket(db, orgId, DAILY[action], now);
 }
 
 /**

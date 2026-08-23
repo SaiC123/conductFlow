@@ -63,8 +63,16 @@ export function subjectFor(address: string | null, salt = readEnv("WAITLIST_HASH
 
 interface ConsumeResult { allowed: boolean; remaining: number; reset_at: string }
 
-async function charge(
-  db: SupabaseClient, subject: string, rule: LimitRule, now: number,
+/**
+ * Charges one window for one opaque subject and throws RateLimited if it declines.
+ *
+ * Exported alongside chargeOrgBucket for the same reason: the waitlist is no longer the only
+ * thing a caller with no organization can reach. Redeeming an invitation is the other one —
+ * whoever is holding the link is not a member of anything yet, so there is no org to key on
+ * and this is the only shape of limiter that applies. Only the sentence differs.
+ */
+export async function chargeAnonBucket(
+  db: SupabaseClient, subject: string, rule: LimitRule, now: number, message?: string,
 ): Promise<void> {
   const { data, error } = await db.rpc("consume_anon_rate_limit", {
     p_subject: subject, p_bucket: rule.bucket, p_window_seconds: rule.windowSeconds,
@@ -79,7 +87,7 @@ async function charge(
   const retryAfter = Math.max(1,
     Math.ceil((new Date(result.reset_at).getTime() - now) / 1000));
   throw new RateLimited(
-    "Too many signups from here just now. Try again a little later.",
+    message ?? "Too many signups from here just now. Try again a little later.",
     retryAfter, rule.bucket);
 }
 
@@ -93,10 +101,10 @@ async function charge(
 export async function consumeWaitlistBudget(
   db: SupabaseClient, subject: string | null, now = Date.now(),
 ): Promise<void> {
-  await charge(db, GLOBAL_SUBJECT, WAITLIST_GLOBAL, now);
+  await chargeAnonBucket(db, GLOBAL_SUBJECT, WAITLIST_GLOBAL, now);
   if (!subject) return;
-  await charge(db, subject, WAITLIST_BURST, now);
-  await charge(db, subject, WAITLIST_DAILY, now);
+  await chargeAnonBucket(db, subject, WAITLIST_BURST, now);
+  await chargeAnonBucket(db, subject, WAITLIST_DAILY, now);
 }
 
 /**

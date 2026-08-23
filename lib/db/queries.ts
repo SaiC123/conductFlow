@@ -60,29 +60,48 @@ export async function getTranscriptForCommitment(commitmentId: string): Promise<
 
 export interface BoardTask {
   id: string; commitment_id: string; title: string;
-  owner: string | null; due: string | null; status: TaskStatus;
+  /** Whoever the transcript named. Shown only while nobody real has been assigned. */
+  owner_name: string | null;
+  /** The member the task belongs to, and the address to put on the card for them. */
+  owner_user_id: string | null;
+  owner_email: string | null;
+  due: string | null; status: TaskStatus;
   completed_at: string | null; client_name: string;
+}
+
+/**
+ * The row shape the select below returns. Written out because the select string is built from
+ * two pieces to fit the column, and supabase-js can only infer a response type from a string
+ * literal it can read whole.
+ */
+interface BoardQueryRow {
+  id: string; commitment_id: string; title: string;
+  owner_name: string | null; owner_user_id: string | null;
+  due: string | null; status: TaskStatus; completed_at: string | null;
+  app_user: { email?: string } | null;
+  commitment: { client_contact?: { name?: string } | null } | null;
 }
 
 /** Board rows: the task plus the client it was promised to and the commitment it came from. */
 export async function listBoardTasks(orgId: string): Promise<BoardTask[]> {
   const s = await getServerClient();
   const { data, error } = await s.from("task")
-    .select("id,commitment_id,title,owner,due,status,completed_at,commitment(client_contact(name))")
+    .select("id,commitment_id,title,owner_name,owner_user_id,due,status,completed_at,"
+      + "app_user(email),commitment(client_contact(name))")
     .eq("org_id", orgId)
     .order("due", { ascending: true, nullsFirst: false });
   logFailure("listBoardTasks", error);
-  return (data ?? []).map((r) => ({
-    id: r.id as string,
-    commitment_id: r.commitment_id as string,
-    title: r.title as string,
-    owner: (r.owner as string | null) ?? null,
-    due: (r.due as string | null) ?? null,
-    status: r.status as TaskStatus,
-    completed_at: (r.completed_at as string | null) ?? null,
-    client_name:
-      (r.commitment as { client_contact?: { name?: string } | null } | null)
-        ?.client_contact?.name ?? "Unassigned client",
+  return ((data ?? []) as unknown as BoardQueryRow[]).map((r) => ({
+    id: r.id,
+    commitment_id: r.commitment_id,
+    title: r.title,
+    owner_name: r.owner_name ?? null,
+    owner_user_id: r.owner_user_id ?? null,
+    owner_email: r.app_user?.email ?? null,
+    due: r.due ?? null,
+    status: r.status,
+    completed_at: r.completed_at ?? null,
+    client_name: r.commitment?.client_contact?.name ?? "Unassigned client",
   }));
 }
 
