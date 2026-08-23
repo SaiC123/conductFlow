@@ -17,7 +17,7 @@ let db: SupabaseClient;
 async function makeTask(due = new Date(NOW.getTime() + DAY), status = "open") {
   const { data, error } = await db.from("task").insert({
     org_id: orgA, commitment_id: commitmentA, title: "Update fixture",
-    owner: "owner@demo.test", due: due.toISOString(), status,
+    owner_name: "owner@demo.test", due: due.toISOString(), status,
   }).select("id").single();
   if (error) throw error;
   return data.id as string;

@@ -20,7 +20,8 @@ function commitment(over: Partial<Commitment> = {}): Commitment {
 function task(over: Partial<Task> = {}): Task {
   return {
     id: "t1", org_id: "org-a", commitment_id: "c1", title: "Send the deck",
-    owner: null, due: null, status: "open", completed_at: null, completed_by: null,
+    owner_name: null, owner_user_id: null, due: null, status: "open",
+    completed_at: null, completed_by: null,
     created_at: "2026-08-01T00:00:00.000Z",
     ...over,
   };

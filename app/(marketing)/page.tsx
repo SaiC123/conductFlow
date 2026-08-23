@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { Badge, buttonStyle, Card, SectionLabel, StatusPill } from "@/components/ui/primitives";
+import { WaitlistHero } from "@/components/waitlist/WaitlistHero";
+import {
+  publishedPartners, publishedTestimonials, PILOT_ORGS,
+} from "@/lib/marketing/proof";
+import { waitlistCount } from "@/lib/marketing/waitlist-count";
 import { HARD_PROHIBITED } from "@/lib/agent/blueprint";
 
 /**
  * One argument, in order: here is a promise you made, here is the evidence it came from,
- * here is the line the product cannot cross, and here is what it is bad at. No
- * testimonials, logos, or metrics — none exist yet, and inventing them on a page a real
- * customer reads would be a lie.
+ * here is the line the product cannot cross, and here is what it is bad at.
+ *
+ * Proof appears only where it is real. The pilot counts are stated because they are
+ * counts; named quotes stay out of the build until someone has actually given one, which
+ * lib/marketing/proof.ts enforces rather than trusts.
  */
 
 /** Plain English for the limits enforced in code, not in settings. */
@@ -43,8 +50,13 @@ const LIMITS = [
   },
 ];
 
+/**
+ * Narrower than the app's frame — this is prose, and a 1280px measure is unreadable — but
+ * it still tracks the display rather than sitting at 960px on every screen ever made.
+ */
 const shell: React.CSSProperties = {
-  maxWidth: 960, marginInline: "auto", paddingInline: "var(--space-5)",
+  maxWidth: "min(100%, clamp(960px, 68vw, 1180px))",
+  marginInline: "auto", paddingInline: "var(--gutter)",
 };
 
 /**
@@ -65,7 +77,66 @@ function Rail({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-export default function Home() {
+/**
+ * Quotes appear only once a real one has been recorded in lib/marketing/proof.ts. Until
+ * then this is the counts and nothing else — which is still proof, and is proof that
+ * cannot turn out to be attributed to somebody who never said it.
+ */
+function Proof({ signupCount }: { signupCount: number }) {
+  const testimonials = publishedTestimonials();
+  const partners = publishedPartners();
+
+  return (
+    <section className="cf-reveal" style={{ borderTop: "1px solid var(--border)",
+      borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
+      <div style={{ ...shell, paddingBlock: "var(--space-6)" }}>
+        <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap",
+          justifyContent: "space-between", alignItems: "baseline" }}>
+          <SectionLabel>In the pilot now</SectionLabel>
+          <p className="mono" style={{ color: "var(--faint)", fontSize: "var(--text-xs)" }}>
+            {PILOT_ORGS}+ organisations · {signupCount} on the waitlist
+          </p>
+        </div>
+
+        {partners.length > 0 && (
+          <ul style={{ listStyle: "none", padding: 0, margin: "var(--space-4) 0 0",
+            display: "flex", flexWrap: "wrap", gap: "var(--space-5)" }}>
+            {partners.map((name) => (
+              <li key={name} style={{ color: "var(--muted)", fontWeight: 500,
+                fontSize: "var(--text-md)" }}>{name}</li>
+            ))}
+          </ul>
+        )}
+
+        {testimonials.length > 0 && (
+          <div style={{ marginTop: "var(--space-5)", display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: "var(--space-4)" }}>
+            {testimonials.map((t) => (
+              <figure key={t.name} className="cf-lift" style={{ margin: 0,
+                background: "var(--raised)", border: "1px solid var(--border)",
+                borderRadius: "var(--radius)", padding: "var(--space-4)" }}>
+                <blockquote style={{ margin: 0, lineHeight: 1.7 }}>
+                  &ldquo;{t.quote}&rdquo;
+                </blockquote>
+                <figcaption className="mono" style={{ color: "var(--faint)",
+                  fontSize: "var(--text-xs)", marginTop: "var(--space-3)" }}>
+                  {t.name} · {t.role}, {t.org}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Same as /waitlist: static for a minute at a time, so the count is never stale for long. */
+export const revalidate = 60;
+
+export default async function Home() {
+  const signupCount = await waitlistCount();
   return (
     <>
       <header style={{ borderBottom: "1px solid var(--border)" }}>
@@ -79,9 +150,28 @@ export default function Home() {
       </header>
 
       <main>
+        {/* The waitlist comes first: until early access opens, signing up is the only
+            thing a stranger can actually do. The argument for the product is still here,
+            one scroll down, for the people who want it before they hand over an address. */}
+        <WaitlistHero
+          signupCount={signupCount}
+          minHeight="calc(100dvh - 57px)"
+          footer={
+            <a href="#what-it-does" className="cf-cue"
+              style={{ display: "inline-flex", alignItems: "center",
+              gap: "var(--space-2)", color: "var(--muted)", fontSize: "var(--text-sm)" }}>
+              See what it does
+              <span aria-hidden>↓</span>
+            </a>
+          }
+        />
+
+        <Proof signupCount={signupCount} />
+
         {/* Copy left, evidence right, and the evidence dropped half a step so the two
             columns don't read as a matched pair. */}
-        <section style={{ ...shell, display: "flex", flexWrap: "wrap",
+        <section id="what-it-does" className="cf-reveal"
+          style={{ ...shell, display: "flex", flexWrap: "wrap",
           gap: "var(--space-7)", alignItems: "flex-start",
           paddingTop: "var(--space-7)", paddingBottom: "var(--space-7)" }}>
           <div style={{ flex: "1 1 400px", minWidth: 0 }}>
@@ -186,7 +276,7 @@ export default function Home() {
         </section>
 
         {/* A thin band on purpose: the page shouldn't be four tall sections in a row. */}
-        <section style={{ borderTop: "1px solid var(--border)",
+        <section className="cf-reveal" style={{ borderTop: "1px solid var(--border)",
           borderBottom: "1px solid var(--border)" }}>
           <div style={{ ...shell, paddingBlock: "var(--space-5)" }}>
             <Rail label="after">
@@ -199,7 +289,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section style={{ background: "var(--surface)",
+        <section className="cf-reveal" style={{ background: "var(--surface)",
           borderBottom: "1px solid var(--border)" }}>
           <div style={{ ...shell, paddingBlock: "var(--space-7)" }}>
             <SectionLabel>The floor</SectionLabel>
@@ -262,7 +352,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section style={{ ...shell, paddingBlock: "var(--space-7)" }}>
+        <section className="cf-reveal" style={{ ...shell, paddingBlock: "var(--space-7)" }}>
           <SectionLabel>Limits</SectionLabel>
           <h2 style={{ fontSize: "var(--text-lg)", maxWidth: "30ch" }}>
             What you would find out in week two
@@ -276,7 +366,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section style={{ borderTop: "1px solid var(--border)" }}>
+        <section className="cf-reveal" style={{ borderTop: "1px solid var(--border)" }}>
           <div style={{ ...shell, paddingTop: "var(--space-7)",
             paddingBottom: "var(--space-6)" }}>
             <h2 style={{ fontSize: "var(--text-xl)", maxWidth: "22ch" }}>

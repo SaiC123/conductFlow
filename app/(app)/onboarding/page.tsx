@@ -1,4 +1,5 @@
 import { signInAsDemoOwner } from "@/app/actions/dev-auth";
+import { safeNextPath } from "@/lib/http/origin";
 import { Card, CardTitle, buttonStyle, fieldStyle, labelStyle } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +32,11 @@ function OrRule() {
 }
 
 export default async function Onboarding({ searchParams }:
-  { searchParams: Promise<{ error?: string; sent?: string }> }) {
-  const { error, sent } = await searchParams;
+  { searchParams: Promise<{ error?: string; sent?: string; next?: string }> }) {
+  const { error, sent, next } = await searchParams;
+  // Somebody sent here by a failed sign-in that had somewhere to be — an invitation, today —
+  // should end up there once it works, rather than in the queue.
+  const onwards = safeNextPath(next);
   // The dev stub also requires a loopback Supabase URL, so a dev build pointed at the
   // hosted project cannot mint a session there. See app/actions/dev-auth.ts.
   const dev = process.env.NODE_ENV !== "production";
@@ -53,6 +57,7 @@ export default async function Onboarding({ searchParams }:
       </p>
 
       <form action="/auth/signin" method="get">
+        {onwards && <input type="hidden" name="next" value={onwards} />}
         <button type="submit" style={{
           ...buttonStyle("secondary"),
           background: "#fff", color: "#111", borderColor: "#fff", fontWeight: 600,
@@ -70,6 +75,7 @@ export default async function Onboarding({ searchParams }:
         a server component, and works before any bundle has loaded.
       */}
       <form action="/auth/email" method="post">
+        {onwards && <input type="hidden" name="next" value={onwards} />}
         <label style={{ ...labelStyle, marginTop: 0 }}>
           Email address
           <input name="email" type="email" required autoComplete="email"

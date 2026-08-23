@@ -1,6 +1,50 @@
 @import "tailwindcss";
 
 /*
+ * Satoshi and Clash Display, both from Fontshare under the ITF Free Font Licence, which
+ * permits commercial use and redistribution as part of a site. Self-hosted from
+ * public/fonts rather than loaded from cdn.fontshare.com: a third-party request on the
+ * critical path is a third party who can be slow, be down, or watch every visitor.
+ *
+ * woff2 only. Every browser that has supported this app for years supports it, and the
+ * .woff and .ttf the foundry also offers are three times the bytes for nobody.
+ *
+ * `swap` because the alternative is invisible text while 25KB arrives. `size-adjust` is
+ * deliberately absent: both faces are close enough to the system stack that the swap does
+ * not shift layout noticeably, and a wrong adjust is worse than none.
+ */
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-400.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-500.woff2") format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-700.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Clash Display";
+  src: url("/fonts/clash-display-400.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Clash Display";
+  src: url("/fonts/clash-display-500.woff2") format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Clash Display";
+  src: url("/fonts/clash-display-600.woff2") format("woff2");
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+
+/*
  * One place where the product's look is decided. Screens compose tokens and the
  * primitives in components/ui; they do not invent colours, spacing, or type sizes.
  *
@@ -59,7 +103,8 @@
   --danger-quiet: rgba(229, 72, 77, 0.10);
   --danger-line: rgba(229, 72, 77, 0.34);
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Satoshi", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Clash Display", var(--font-sans);
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Type scale, 1.25 ratio, capped — an ops tool has no use for hero type past 30px. */
@@ -108,6 +153,31 @@
   --btn-border: var(--border-strong);
 }
 
+/*
+ * One step up on a large monitor. The scale above is sized for a laptop, and on a 1440p or
+ * 4K screen a 13px base with a 1040px column leaves the product marooned in the middle of
+ * the display — small type in a narrow strip, which reads as a page that failed to load
+ * rather than as a dense tool. A step rather than a fluid clamp: every size stays a whole
+ * pixel, so nothing lands on a half-pixel and blurs.
+ */
+@media (min-width: 1600px) {
+  :root {
+    --text-xs: 12px;
+    --text-sm: 13px;
+    --text-base: 14px;
+    --text-md: 17px;
+    --text-lg: 21px;
+    --text-xl: 27px;
+    --text-2xl: 34px;
+    --shell: 1280px;
+  }
+}
+
+/* A phone has no room for a 24px gutter on both edges of a dense row. */
+@media (max-width: 560px) {
+  :root { --gutter: var(--space-4); }
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html {
@@ -128,6 +198,17 @@ html, body {
 
 /* 600, not the UA's 700: at these sizes bold reads as shouting rather than as hierarchy. */
 h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.25; margin: 0; font-weight: 600; }
+
+/*
+ * Marketing only, set by app/(marketing)/layout.tsx. Clash Display is a display face: it
+ * earns its keep on a 104px hero and looks like fancy dress on a 15px panel title, so it
+ * never reaches app/(app). Its own drawing is tighter than Satoshi's, hence the extra
+ * negative tracking here rather than in the shared rule above.
+ */
+.cf-marketing h1, .cf-marketing h2, .cf-marketing h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+}
 p { margin: 0; }
 
 .mono {
@@ -210,6 +291,19 @@ button:hover:not(:disabled),
 .cf-row:hover { background: var(--surface-hover); }
 .cf-row:hover .cf-row-go { opacity: 1; transform: translateX(2px); }
 
+/*
+ * The waitlist is the one surface aimed at a stranger rather than at an operator, so its
+ * call to action is the page's brightest thing — white on near-black — instead of the
+ * accent every in-app button uses. The variable exists so the inline style can name a
+ * colour the cascade is allowed to change on hover.
+ */
+:root { --cf-wl-cta-bg: var(--text); }
+.cf-wl-cta:hover:not(:disabled) { --cf-wl-cta-bg: #FFFFFF; }
+
+/* A field that answers focus with more than the ring: the fill lifts as well. */
+.cf-wl-field:hover { background: var(--raised-hover); }
+.cf-wl-field:focus-visible { border-color: var(--border-loud); }
+
 /* Present to the keyboard, out of the way of everyone else, until it is focused. */
 .skip-link {
   position: absolute;
@@ -240,3 +334,103 @@ button:hover:not(:disabled),
   0%, 100% { opacity: 0.45; }
   50% { opacity: 0.75; }
 }
+
+/*
+ * Motion on the marketing pages only. The app itself stays still on purpose — an operator
+ * checking a queue twenty times a day does not want the queue to perform — so every rule
+ * below is opt-in by class and none of them are used inside (app).
+ *
+ * All of it is decoration: the global prefers-reduced-motion rule collapses these to
+ * nothing, and the page still reads correctly with every animation removed.
+ */
+@keyframes cf-rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The hero's own pieces, staggered so the eye lands on them in reading order. */
+.cf-rise { animation: cf-rise-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.cf-rise-1 { animation-delay: 60ms; }
+.cf-rise-2 { animation-delay: 130ms; }
+.cf-rise-3 { animation-delay: 200ms; }
+.cf-rise-4 { animation-delay: 280ms; }
+
+/*
+ * Reveal on scroll without a scroll listener. Where view timelines are supported the
+ * browser drives it off the element's own position; where they are not, the @supports
+ * block never applies and the content is simply visible, which is the correct fallback.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .cf-reveal {
+      animation: cf-rise-in linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 26%;
+    }
+  }
+}
+
+/*
+ * A card that answers the pointer. Transform and border only — no shadow, because on a
+ * near-black canvas a shadow is invisible and only costs a repaint.
+ */
+.cf-lift {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color var(--motion), background var(--motion);
+  will-change: transform;
+}
+.cf-lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-loud);
+  background: var(--surface-hover);
+}
+
+/* The cue at the foot of the hero: the arrow keeps moving, the label answers the pointer. */
+@keyframes cf-nudge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}
+.cf-cue { transition: color var(--motion); }
+.cf-cue:hover { color: var(--text); }
+.cf-cue > span[aria-hidden] { animation: cf-nudge 1.8s ease-in-out infinite; display: inline-block; }
+.cf-cue:hover > span[aria-hidden] { animation-duration: 0.9s; }
+
+/*
+ * One slow wash behind the hero, sized in vmax so it scales with the display rather than
+ * sitting as a fixed blob on a large monitor. Pointer-events none: it is scenery.
+ */
+@keyframes cf-drift {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.55; }
+  50% { transform: translate(-50%, -54%) scale(1.12); opacity: 0.8; }
+}
+.cf-glow {
+  position: relative;
+  isolation: isolate;
+  /* `clip`, not `hidden`: it keeps the wash inside the section without turning the
+     section into a scroll container. Scenery must never widen the page — sized in vmax,
+     this ran 240px past the viewport on a phone, because vmax there is the height. */
+  overflow: clip;
+}
+.cf-glow::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: min(90vmax, 100%);
+  height: 60vmax;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(91, 94, 240, 0.13), transparent 70%);
+  animation: cf-drift 14s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* A link whose underline arrives rather than being there the whole time. */
+.cf-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0% 1px;
+  transition: background-size 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cf-underline:hover { background-size: 100% 1px; }

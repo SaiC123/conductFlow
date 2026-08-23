@@ -176,6 +176,43 @@ describe("agent_blueprint is owner-only", () => {
   });
 });
 
+describe("drive_template is org-scoped and never deleted", () => {
+  // The suite never resets, and there is no delete path, so every insert claims a fresh id.
+  const fileId = () => `picker-test-${crypto.randomUUID()}`;
+
+  it("an org member records a picked file and reads it back", async () => {
+    const a = client(await jwt(userA));
+    const id = fileId();
+    const { error } = await a.from("drive_template").insert({
+      org_id: orgA, file_id: id, name: "Follow-up template", mime_type: "text/plain" });
+    expect(error).toBeNull();
+
+    const { data } = await a.from("drive_template").select("file_id,state").eq("file_id", id);
+    expect(data).toHaveLength(1);
+    expect(data![0].state).toBe("active");
+  });
+
+  it("user in org B cannot read org A's templates", async () => {
+    const b = client(await jwt(userB));
+    const { data } = await b.from("drive_template").select("id").eq("org_id", orgA);
+    expect(data).toEqual([]);
+  });
+
+  it("an outsider cannot attach a file to org A", async () => {
+    const b = client(await jwt(userB));
+    const { error } = await b.from("drive_template").insert({
+      org_id: orgA, file_id: fileId(), name: "Planted template", mime_type: "text/plain" });
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe("42501");
+  });
+
+  it("no role may delete a template record — forgetting is a state change", async () => {
+    const a = client(await jwt(userA));
+    const { error } = await a.from("drive_template").delete().eq("org_id", orgA);
+    expect(error).not.toBeNull();
+  });
+});
+
 describe("audit_event is append-only", () => {
   it("an org member can insert and read audit rows", async () => {
     const a = client(await jwt(userA));
@@ -190,5 +227,194 @@ describe("audit_event is append-only", () => {
     expect(del.error).not.toBeNull();
     const upd = await a.from("audit_event").update({ target: "tampered" }).eq("org_id", orgA);
     expect(upd.error).not.toBeNull();
+  });
+});
+
+describe("org_invite is owner-only, and its digests are nobody's", () => {
+  // The table that decides who else gets to see a customer's transcripts. Every assertion
+  // here is a way in that has to stay shut.
+  const email = () => `rls-${crypto.randomUUID().slice(0, 8)}@example.test`;
+  // A digest is unique in the table, as a digest of a fresh token always would be. Anything
+  // fixed here collides with itself on the second insert.
+  const digest = () => crypto.randomUUID().replace(/-/g, "").repeat(2);
+
+  async function anInvite(role = "member") {
+    const a = client(await jwt(userA));
+    const address = email();
+    const { data, error } = await a.from("org_invite").insert({
+      org_id: orgA, email: address, role,
+      token_hash: digest(), expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+    }).select("id").single();
+    if (error) throw error;
+    return { id: data!.id as string, email: address };
+  }
+
+  it("an owner can issue one and read it back", async () => {
+    const a = client(await jwt(userA));
+    const invite = await anInvite();
+    const { data } = await a.from("org_invite").select("id,email,state").eq("id", invite.id);
+    expect(data).toHaveLength(1);
+    expect(data![0].state).toBe("pending");
+  });
+
+  it("a member cannot issue one", async () => {
+    const m = client(await jwt(memberA));
+    const { error } = await m.from("org_invite").insert({
+      org_id: orgA, email: email(), role: "owner",
+      token_hash: digest(), expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    expect(error?.code).toBe("42501");
+  });
+
+  it("a member cannot read who has been invited", async () => {
+    await anInvite();
+    const m = client(await jwt(memberA));
+    const { data } = await m.from("org_invite").select("id").eq("org_id", orgA);
+    expect(data).toEqual([]);
+  });
+
+  it("user in org B cannot read org A's invites", async () => {
+    await anInvite();
+    const b = client(await jwt(userB));
+    const { data } = await b.from("org_invite").select("id").eq("org_id", orgA);
+    expect(data).toEqual([]);
+  });
+
+  it("not even the owner who issued it can read the token digest", async () => {
+    // The link is the credential. A session that could read digests back could not replay
+    // them either — but it is one preimage attack and one weak token away from mattering,
+    // and there is no reason for a browser to hold them at all.
+    const a = client(await jwt(userA));
+    const invite = await anInvite();
+    const { data, error } = await a.from("org_invite").select("token_hash").eq("id", invite.id);
+    expect(data).toBeNull();
+    expect(error?.code).toBe("42501");
+  });
+
+  it("an owner may revoke an invite but may not rewrite one", async () => {
+    const a = client(await jwt(userA));
+    const invite = await anInvite("member");
+
+    const revoke = await a.from("org_invite").update({ state: "revoked" }).eq("id", invite.id);
+    expect(revoke.error).toBeNull();
+
+    // A link already in somebody's hands must not quietly become an owner invitation, or an
+    // invitation to a different address, or one that never expires.
+    for (const patch of [{ role: "owner" }, { email: "attacker@example.test" },
+      { expires_at: "2099-01-01T00:00:00.000Z" }]) {
+      const { error } = await a.from("org_invite").update(patch).eq("id", invite.id);
+      expect(error?.code).toBe("42501");
+    }
+  });
+
+  it("no role may delete an invite — how somebody got access is the record", async () => {
+    const a = client(await jwt(userA));
+    const invite = await anInvite();
+    const { error } = await a.from("org_invite").delete().eq("id", invite.id);
+    expect(error).not.toBeNull();
+  });
+
+  it("anonymous callers are denied outright", async () => {
+    const anon = createClient(URL, ANON);
+    const { data, error } = await anon.from("org_invite").select("id");
+    expect(data).toBeNull();
+    expect(error?.code).toBe("42501");
+  });
+});
+
+describe("the roster is visible inside the org and nowhere else", () => {
+  it("a member sees their colleagues' memberships", async () => {
+    const m = client(await jwt(memberA));
+    const { data } = await m.from("membership").select("user_id").eq("org_id", orgA);
+    expect(data!.map((r) => r.user_id).sort()).toEqual([userA, memberA].sort());
+  });
+
+  it("a member sees their colleagues' addresses, and no one else's", async () => {
+    const m = client(await jwt(memberA));
+    const { data } = await m.from("app_user").select("id,email");
+    const ids = (data ?? []).map((r) => r.id);
+    expect(ids).toContain(userA);
+    expect(ids).toContain(memberA);
+    expect(ids).not.toContain(userB);
+  });
+
+  it("user in org B sees nothing of org A's roster", async () => {
+    const b = client(await jwt(userB));
+    const { data } = await b.from("membership").select("user_id").eq("org_id", orgA);
+    expect(data).toEqual([]);
+    const { data: users } = await b.from("app_user").select("id").eq("id", userA);
+    expect(users).toEqual([]);
+  });
+
+  it("a member cannot promote themselves", async () => {
+    const m = client(await jwt(memberA));
+    await m.from("membership").update({ role: "owner" })
+      .eq("org_id", orgA).eq("user_id", memberA);
+
+    const a = client(await jwt(userA));
+    const { data } = await a.from("membership").select("role")
+      .eq("org_id", orgA).eq("user_id", memberA).single();
+    expect(data!.role).toBe("member");
+  });
+
+  it("a member cannot remove anybody", async () => {
+    const m = client(await jwt(memberA));
+    await m.from("membership").delete().eq("org_id", orgA).eq("user_id", userA);
+
+    const a = client(await jwt(userA));
+    const { data } = await a.from("membership").select("role")
+      .eq("org_id", orgA).eq("user_id", userA).single();
+    expect(data!.role).toBe("owner");
+  });
+
+  it("nobody may write themselves into an organization", async () => {
+    // The one door in is an invitation, redeemed server-side. If this insert worked, every
+    // check on that path would be decoration.
+    const b = client(await jwt(userB));
+    const { error } = await b.from("membership")
+      .insert({ org_id: orgA, user_id: userB, role: "owner" });
+    expect(error?.code).toBe("42501");
+
+    const a = client(await jwt(userA));
+    const { error: ownerToo } = await a.from("membership")
+      .insert({ org_id: orgA, user_id: userB, role: "member" });
+    expect(ownerToo?.code).toBe("42501");
+  });
+});
+
+describe("a task belongs to a member or to nobody", () => {
+  const commitmentA = "00000000-0000-0000-0000-0000000000f1";
+
+  async function aTask(): Promise<string> {
+    const a = client(await jwt(userA));
+    const { data, error } = await a.from("task").insert({
+      org_id: orgA, commitment_id: commitmentA, title: "RLS assignment fixture",
+    }).select("id").single();
+    if (error) throw error;
+    return data!.id as string;
+  }
+
+  it("a member can hand a task to a colleague", async () => {
+    const m = client(await jwt(memberA));
+    const id = await aTask();
+    const { error } = await m.from("task").update({ owner_user_id: userA }).eq("id", id);
+    expect(error).toBeNull();
+  });
+
+  it("nobody can hand a task to somebody outside the org", async () => {
+    // The cross-tenant edge of assignment: an outsider's address on a card is an outsider's
+    // address disclosed to the org, and the org's work disclosed to them.
+    const a = client(await jwt(userA));
+    const id = await aTask();
+    const { error } = await a.from("task").update({ owner_user_id: userB }).eq("id", id);
+    expect(error?.code).toBe("23514");
+  });
+
+  it("user in org B cannot assign anything in org A", async () => {
+    const id = await aTask();
+    const b = client(await jwt(userB));
+    const { data } = await b.from("task").update({ owner_user_id: userB })
+      .eq("id", id).select("id");
+    expect(data).toEqual([]);
   });
 });

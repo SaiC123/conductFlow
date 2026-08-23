@@ -38,7 +38,12 @@ export interface ApprovalEvent {
 
 export interface Task {
   id: string; org_id: string; commitment_id: string;
-  title: string; owner: string | null; due: string | null;
+  title: string;
+  /** Whoever the transcript named, verbatim. Evidence, not a person the app can act on. */
+  owner_name: string | null;
+  /** The member the task is assigned to. Null until somebody picks it up. */
+  owner_user_id: string | null;
+  due: string | null;
   status: TaskStatus; completed_at: string | null; completed_by: string | null;
   created_at: string;
 }
