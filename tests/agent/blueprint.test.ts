@@ -61,30 +61,41 @@ describe("blueprintToContract", () => {
   });
 });
 
-describe("blueprintToContract re-applies ALWAYS_NEEDS_APPROVAL", () => {
-  // A row like this cannot be written through the editor. It can be written by a
-  // forged PostgREST insert, which is exactly why the read path must not trust it.
-  const forged = {
+describe("blueprintToContract honours the row's approval choice", () => {
+  // Approval is the owner's decision for every editable action, including the ones that
+  // reach a customer. Migration 0018 dropped the database guard that used to override the
+  // row, and the read path no longer demotes anything.
+  const unattendedExternal = {
     ...DEFAULT_BLUEPRINT,
     permitted_actions: ["draft_recap", "push_email_draft", "edit_crm"],
     required_approvals: ["create_internal_task"],
   };
 
-  it("moves an always-approval action out of permittedActions", () => {
-    const c = blueprintToContract(forged);
-    expect(c.permittedActions).not.toContain("push_email_draft");
-    expect(c.permittedActions).not.toContain("edit_crm");
+  it("leaves a customer-reaching action unattended when the row grants it", () => {
+    const c = blueprintToContract(unattendedExternal);
+    expect(c.permittedActions).toContain("push_email_draft");
+    expect(c.permittedActions).toContain("edit_crm");
     expect(c.permittedActions).toContain("draft_recap");
   });
 
-  it("moves it into requiredApprovals rather than dropping it", () => {
-    const c = blueprintToContract(forged);
-    expect(c.requiredApprovals).toContain("push_email_draft");
-    expect(c.requiredApprovals).toContain("edit_crm");
+  it("does not move it into requiredApprovals", () => {
+    const c = blueprintToContract(unattendedExternal);
+    expect(c.requiredApprovals).not.toContain("push_email_draft");
+    expect(c.requiredApprovals).not.toContain("edit_crm");
   });
 
-  it("denies the forged action without approval and allows it with", () => {
-    const c = blueprintToContract(forged);
+  it("runs it without approval", () => {
+    const c = blueprintToContract(unattendedExternal);
+    expect(canExecute("push_email_draft", false, c))
+      .toEqual({ ok: true, reason: "permitted" });
+  });
+
+  it("still gates it when the row asks for approval instead", () => {
+    const c = blueprintToContract({
+      ...DEFAULT_BLUEPRINT,
+      permitted_actions: ["draft_recap"],
+      required_approvals: ["push_email_draft"],
+    });
     expect(canExecute("push_email_draft", false, c))
       .toEqual({ ok: false, reason: "needs_approval" });
     expect(canExecute("push_email_draft", true, c))
@@ -112,7 +123,13 @@ describe("blueprintToContract re-applies ALWAYS_NEEDS_APPROVAL", () => {
 
   it("leaves an untouched default blueprint alone", () => {
     const c = blueprintToContract(DEFAULT_BLUEPRINT);
-    expect(c.permittedActions).toEqual(["draft_recap", "draft_task_list", "draft_follow_up"]);
+    // The two artifact actions ship on: neither reaches a client, and an org that bound a
+    // template in Settings has already said what it wants built.
+    expect(c.permittedActions).toEqual([
+      "draft_recap", "draft_task_list", "draft_follow_up",
+      "draft_client_document", "create_calendar_event",
+    ]);
+    expect(c.requiredApprovals).toContain("push_email_draft");
   });
 });
 
@@ -150,14 +167,14 @@ describe("validateBlueprintEdit", () => {
     expect(r.error).toMatch(/both/i);
   });
 
-  it("refuses to drop approval from an action that leaves the building", () => {
-    // push_email_draft writes into a customer-visible mailbox; it may never be unattended.
+  it("allows dropping approval from an action that leaves the building", () => {
+    // push_email_draft writes into a customer-visible mailbox. Whether the agent asks first
+    // is the owner's decision now, so the editor accepts it as unattended.
     const r = validateBlueprintEdit({
       ...valid, permitted_actions: [...valid.permitted_actions, "push_email_draft"],
       required_approvals: ["create_internal_task"],
     });
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/approval/i);
+    expect(r.ok).toBe(true);
   });
 
   it("bounds the token expiry", () => {

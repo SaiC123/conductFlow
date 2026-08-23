@@ -52,7 +52,7 @@ export default async function SettingsPage({ searchParams }:
   // What the org has actually handed over. Without this list the Drive capability is a
   // green badge over an empty set, which is the thing this screen exists to prevent.
   const { data: templateData } = await db.from("drive_template")
-    .select("id,file_id,name,mime_type,created_at")
+    .select("id,file_id,name,mime_type,created_at,role")
     .eq("org_id", orgId).eq("state", "active")
     .order("created_at", { ascending: false });
 

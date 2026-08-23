@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit/log";
 import { getAccessToken } from "@/lib/google/tokens";
 import { createDriveClient, LIST_PAGE_SIZE } from "@/lib/google/drive";
 import { DRIVE_FILE_SCOPE, parsePickedFiles, type PickedFile } from "@/lib/google/picker";
+import { isTemplateRole } from "@/lib/google/templates";
 
 export interface RecordedPick {
   recorded: number;
@@ -71,6 +72,47 @@ export async function recordPickedTemplates(payload: unknown): Promise<RecordedP
     verified: unreadable !== null,
     unreadable: unreadable ?? [],
   };
+}
+
+/**
+ * Binds a picked file to the artifact it feeds, or clears that binding when `role` is null.
+ *
+ * This is what turns `drive_template` from the record migration 0012 described into the
+ * authority the artifact generators read. The recap path in lib/google/context.ts is
+ * unaffected and still chooses by filename.
+ *
+ * A role is exclusive per org, enforced by the partial unique index in 0019. Rather than
+ * letting that surface as a raw 23505, the previous holder is cleared first, so re-assigning
+ * a role reads as moving it rather than as an error an owner has to interpret.
+ */
+export async function setTemplateRole(templateId: string, role: string | null) {
+  const orgId = await getCurrentOrgId();
+  if (!orgId) throw new Error("Sign in to edit your template files.");
+  if (role !== null && !isTemplateRole(role)) throw new Error(`Unknown template role "${role}".`);
+
+  const db = await getServerClient();
+  const { data: auth } = await db.auth.getUser();
+  const now = new Date().toISOString();
+
+  if (role !== null) {
+    const { error: clearError } = await db.from("drive_template")
+      .update({ role: null, updated_at: now })
+      .eq("org_id", orgId).eq("role", role).eq("state", "active")
+      .neq("id", templateId);
+    if (clearError) throw clearError;
+  }
+
+  const { error } = await db.from("drive_template")
+    .update({ role, updated_at: now })
+    .eq("id", templateId).eq("org_id", orgId);
+  if (error) throw error;
+
+  await logAudit({
+    orgId, actor: "human", action: "update",
+    target: `drive_template:${templateId}:role:${role ?? "none"}`,
+    payloadHash: auth.user?.id,
+  });
+  revalidatePath("/settings");
 }
 
 /**

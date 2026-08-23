@@ -2,10 +2,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateBlueprint } from "@/app/actions/blueprint";
-import { HARD_PROHIBITED, ALWAYS_NEEDS_APPROVAL } from "@/lib/agent/blueprint";
+import { HARD_PROHIBITED } from "@/lib/agent/blueprint";
+
 import {
   Card, CardTitle, Badge, SectionHeading, buttonStyle, fieldStyle,
 } from "@/components/ui/primitives";
+/**
+ * Advisory only. These reach a customer or an outside system, and the row may set them
+ * unattended — approval is the owner's decision for every action. Listed here so the editor
+ * can say so out loud at the moment the choice is made, rather than refusing it.
+ */
+const REACHES_OUTSIDE: readonly string[] = ["push_email_draft", "edit_crm"];
 
 const DESCRIPTIONS: Record<string, string> = {
   draft_recap: "Write a recap of what was said",
@@ -15,6 +22,8 @@ const DESCRIPTIONS: Record<string, string> = {
   propose_recurring_task: "Suggest a promise you make on a regular cadence",
   push_email_draft: "Place a draft in your Gmail drafts folder",
   edit_crm: "Update a client record",
+  draft_client_document: "Create a document from your Drive template",
+  create_calendar_event: "Put a meeting on your calendar",
 };
 
 /** Plain English for limits enforced in code. Same wording as the landing page. */
@@ -91,7 +100,6 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
       <ul style={{ listStyle: "none", padding: 0, margin: 0,
         display: "grid", gap: "var(--space-2)" }}>
         {view.editable.map((action) => {
-          const locked = (ALWAYS_NEEDS_APPROVAL as readonly string[]).includes(action);
           const current = settings[action];
           return (
             <li key={action}>
@@ -117,41 +125,35 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
                   <div role="radiogroup" aria-labelledby={`bp-${action}`}
                     style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap",
                       justifyContent: "flex-end" }}>
-                    {CHOICES.map((choice) => {
-                      const disabled = choice.value === "unattended" && locked;
-                      return (
+                    {CHOICES.map((choice) => (
                         <label key={choice.value}
-                          title={disabled
-                            ? "Not available: this reaches someone outside your team"
-                            : choice.hint}
+                          title={choice.hint}
                           style={{
                             display: "inline-flex", alignItems: "center", gap: "var(--space-2)",
                             fontSize: "var(--text-sm)",
-                            color: disabled ? "var(--faint)"
-                              : current === choice.value ? "var(--text)" : "var(--muted)",
-                            cursor: disabled || !view.canEdit ? "not-allowed" : "pointer",
+                            color: current === choice.value ? "var(--text)" : "var(--muted)",
+                            cursor: view.canEdit ? "pointer" : "not-allowed",
                           }}>
                           <input
                             type="radio"
                             name={`action:${action}`}
                             value={choice.value}
                             checked={current === choice.value}
-                            disabled={disabled || !view.canEdit || isPending}
+                            disabled={!view.canEdit || isPending}
                             onChange={() => setSettings((s) => ({ ...s, [action]: choice.value }))}
                             // Native control keeps arrow-key navigation and its own focus ring.
                             style={{ accentColor: "var(--accent)", margin: 0 }}
                           />
                           {choice.label}
                         </label>
-                      );
-                    })}
+                    ))}
                   </div>
                 </div>
 
-                {locked && (
+                {REACHES_OUTSIDE.includes(action) && current === "unattended" && (
                   <p style={{ color: "var(--faint)", fontSize: "var(--text-xs)",
                     marginTop: "var(--space-2)" }}>
-                    Reaches someone outside your team, so &ldquo;on its own&rdquo; is not offered.
+                    Reaches someone outside your team, and will run without asking you first.
                   </p>
                 )}
               </div>

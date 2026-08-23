@@ -56,16 +56,22 @@ describe("saveBlueprint", () => {
     expect(after.expires_in_minutes).toBe(45);
   });
 
-  it("refuses an edit that grants an always-approval action unattended", async () => {
-    // push_email_draft is dropped from required_approvals here on purpose. Adding it to
-    // permitted_actions while leaving it in required_approvals trips the earlier
+  it("accepts an edit that grants a customer-reaching action unattended", async () => {
+    // Approval is the owner's call for every editable action now. push_email_draft is
+    // dropped from required_approvals here on purpose: leaving it in both arrays trips the
     // both-arrays check instead, which is a different rule — see the case below.
-    await expectRejectedBeforeTheDatabase(() => saveBlueprint(db, orgB, {
+    // Migration 0018 dropped the CHECK that used to refuse this row at the database.
+    const saved = await saveBlueprint(db, orgB, {
       ...DEFAULT_BLUEPRINT,
       permitted_actions: [...DEFAULT_BLUEPRINT.permitted_actions, "push_email_draft"],
       required_approvals: DEFAULT_BLUEPRINT.required_approvals.filter(
         (a) => a !== "push_email_draft"),
-    }, ownerB), /always needs approval/i);
+    }, ownerB);
+    expect(saved.permitted_actions).toContain("push_email_draft");
+
+    const after = await contractFor(db, orgB);
+    expect(after.permittedActions).toContain("push_email_draft");
+    expect(after.requiredApprovals).not.toContain("push_email_draft");
   });
 
   it("refuses an action claimed as both unattended and approval-gated", async () => {

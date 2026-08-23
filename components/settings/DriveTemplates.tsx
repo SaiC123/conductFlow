@@ -1,15 +1,28 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { recordPickedTemplates, forgetDriveTemplate } from "@/app/actions/drive-templates";
+import {
+  recordPickedTemplates, forgetDriveTemplate, setTemplateRole,
+} from "@/app/actions/drive-templates";
 import {
   DRIVE_FILE_SCOPE, TEMPLATE_MIME_TYPES, mapPickedDocuments, isSelectableAsTemplate,
 } from "@/lib/google/picker";
 import { Card, CardTitle, Badge, EmptyState, buttonStyle } from "@/components/ui/primitives";
+import { TEMPLATE_ROLES } from "@/lib/google/templates";
 
 export interface DriveTemplateRow {
   id: string; file_id: string; name: string; mime_type: string; created_at: string;
+  /** Which artifact this file feeds. Null means it is a record only — see migration 0019. */
+  role: string | null;
 }
+
+/** Plain English for each role, so the dropdown does not make an owner guess. */
+const ROLE_LABELS: Record<string, string> = {
+  proposal: "Proposal document",
+  invoice: "Invoice",
+  calendar: "Calendar event",
+  email: "Email follow-up",
+};
 
 interface DriveTemplatesProps {
   templates: DriveTemplateRow[];
@@ -170,6 +183,22 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
     }
   }
 
+  /**
+   * A role is exclusive per org, so assigning one that another file already holds moves it.
+   * The server clears the previous holder; refreshing is what makes that visible here.
+   */
+  async function assignRole(id: string, role: string) {
+    setError(null); setNotice(null); setWarning(null); setBusyId(id);
+    try {
+      await setTemplateRole(id, role === "" ? null : role);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That did not work.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const pickButton = (
     <button onClick={pick} disabled={busy || !driveConnected} aria-busy={busy}
       style={{ ...buttonStyle("secondary", busy || !driveConnected), minWidth: 148,
@@ -244,12 +273,34 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
                     </span>
                   </span>
                 </span>
-                <button onClick={() => forget(t.id)} disabled={busyId === t.id}
-                  aria-busy={busyId === t.id}
-                  style={{ ...buttonStyle("ghost", busyId === t.id), minWidth: 84,
-                    flexShrink: 0 }}>
-                  {busyId === t.id ? "Forgetting…" : "Forget"}
-                </button>
+                <span style={{ display: "flex", alignItems: "center",
+                  gap: "var(--space-2)", flexShrink: 0 }}>
+                  {/*
+                    Binding a role is what makes a file feed an artifact. A file with no role
+                    stays a record: still listed, still audit history, but no generator reads
+                    it. The recap path is unaffected either way — it picks by filename.
+                  */}
+                  <select aria-label={`What "${t.name}" is used for`}
+                    value={t.role ?? ""}
+                    disabled={busyId === t.id}
+                    onChange={(e) => assignRole(t.id, e.target.value)}
+                    style={{ background: "var(--surface)", color: "var(--text)",
+                      border: "1px solid var(--border)", borderRadius: "var(--radius)",
+                      padding: "var(--space-1) var(--space-2)",
+                      fontSize: "var(--text-sm)" }}>
+                    <option value="">Not used for an artifact</option>
+                    {TEMPLATE_ROLES.map((role) => (
+                      <option key={role} value={role}>{ROLE_LABELS[role] ?? role}</option>
+                    ))}
+                  </select>
+
+                  <button onClick={() => forget(t.id)} disabled={busyId === t.id}
+                    aria-busy={busyId === t.id}
+                    style={{ ...buttonStyle("ghost", busyId === t.id), minWidth: 84,
+                      flexShrink: 0 }}>
+                    {busyId === t.id ? "Forgetting…" : "Forget"}
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
