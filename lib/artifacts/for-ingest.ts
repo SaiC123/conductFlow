@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AgentContract } from "@/lib/agent/contract";
 import { canExecute } from "@/lib/agent/execute-policy";
-import type { ExtractedCommitment } from "@/lib/agent/schema";
+import type { ExtractedCommitment, ExtractedAmount } from "@/lib/agent/schema";
 import { buildTokenValues } from "./values";
 import { generateDocument, generateCalendarEvent } from "./generate";
 import { artifactCapabilitiesFor, type ArtifactCapabilities } from "./deps";
@@ -18,6 +18,8 @@ export interface ArtifactRunArgs {
   /** YYYY-MM-DD, as typed into /ingest. */
   occurredAt: string;
   commitments: ExtractedCommitment[];
+  /** Verified verbatim in lib/agent/extract.ts before they get here. */
+  amounts?: ExtractedAmount[];
   contract: AgentContract;
 }
 
@@ -59,6 +61,7 @@ export async function generateArtifactsForConversation(
     conversationTitle: args.title,
     occurredAt: args.occurredAt,
     commitments: args.commitments,
+    amounts: args.amounts,
     today: new Date().toISOString().slice(0, 10),
   });
 

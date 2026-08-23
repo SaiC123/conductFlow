@@ -135,21 +135,56 @@ describe("generateArtifactsForConversation", () => {
     expect(rows.find((x) => x.kind === "calendar_event")?.outcome).toBe("created");
   });
 
-  // Money is the one thing the data model cannot supply, so the message has to say so
-  // rather than sending an owner hunting for a field that does not exist.
-  it("explains a money token instead of blaming the conversation", async () => {
+  // A money token is the one kind that does not block. ConductFlow records no amounts, but
+  // refusing to produce the document was worse than producing one an owner finishes by hand.
+  it("still creates the document when a money token has no value", async () => {
     const { orgId, conversationId } = await scenario(["proposal"]);
     const { caps, calls } = capabilities("Fee for {{client_name}} is {{fee}}",
       { calendarReady: false });
 
     const r = await generateArtifactsForConversation(db, args(orgId, conversationId), caps);
 
-    expect(r.documentUrl).toBeNull();
-    expect(calls.copied).toBe(0);
-    expect(r.blocked.join(" ")).toMatch(/does not record amounts/);
+    expect(r.documentUrl).toContain("doc-1");
+    expect(calls.copied).toBe(1);
+    expect(r.blocked).toEqual([]);
 
     const rows = await artifactRows(orgId);
-    expect(rows.find((x) => x.kind === "document")?.outcome).toBe("missing_tokens");
+    expect(rows.find((x) => x.kind === "document")?.outcome).toBe("created");
+  });
+
+  it("puts the figures that were actually said into {{amounts}}", async () => {
+    const { orgId, conversationId } = await scenario(["proposal"]);
+    const { caps } = capabilities("Agreed:\n{{amounts}}", { calendarReady: false });
+    let replaced: { literal: string; value: string }[] = [];
+    caps.deps.docs = {
+      async copyTemplate(_f, title) {
+        return { id: "doc-1", name: title, url: "https://docs.google.com/document/d/doc-1/edit" };
+      },
+      async replaceTokens(_id, r) { replaced = r; },
+    };
+
+    await generateArtifactsForConversation(db, {
+      ...args(orgId, conversationId),
+      amounts: [
+        { label: "monthly services", amount: "$1,250 per month", source_span: "x" },
+        { label: "advertising budget", amount: "$400", source_span: "y" },
+      ],
+    }, caps);
+
+    expect(replaced[0].value)
+      .toBe("• monthly services: $1,250 per month\n• advertising budget: $400");
+  });
+
+  // A template asking for a figure when none was discussed still blocks: an empty list would
+  // read as "nothing was agreed", which is a claim rather than an absence.
+  it("blocks on {{amounts}} when the conversation discussed no money", async () => {
+    const { orgId, conversationId } = await scenario(["proposal"]);
+    const { caps, calls } = capabilities("Agreed: {{amounts}}", { calendarReady: false });
+
+    const r = await generateArtifactsForConversation(db, args(orgId, conversationId), caps);
+
+    expect(r.documentUrl).toBeNull();
+    expect(calls.copied).toBe(0);
   });
 
   it("skips the calendar entirely when the org has not granted it", async () => {

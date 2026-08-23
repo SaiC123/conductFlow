@@ -1,7 +1,7 @@
 import type { LanguageModel } from "ai";
 import {
-  extractionSchema, EXTRACTION_MODEL, MAX_COMMITMENTS, MAX_TRANSCRIPT_CHARS,
-  type ExtractedCommitment,
+  extractionSchema, EXTRACTION_MODEL, MAX_COMMITMENTS, MAX_TRANSCRIPT_CHARS, MAX_AMOUNTS,
+  type ExtractedCommitment, type ExtractedAmount,
 } from "./schema";
 import { EXTRACTION_SYSTEM_PROMPT, buildExtractionPrompt } from "./prompts";
 import { sanitizeIngested } from "./injection";
@@ -15,6 +15,8 @@ export interface ExtractInput {
 
 export interface ExtractResult {
   commitments: ExtractedCommitment[];
+  /** Figures stated in the transcript, each verified to appear in it verbatim. */
+  amounts: ExtractedAmount[];
   flagged: string[];
   dropped: number;
 }
@@ -73,5 +75,15 @@ export async function extractCommitments(
     };
   });
 
-  return { commitments, flagged, dropped };
+  // Amounts are filtered, not downgraded. An unverifiable commitment still tells an owner
+  // something worth reading at low confidence; an unverifiable figure is a number nobody
+  // said, and it is heading for a document a client may see. Both the quote and the figure
+  // itself must appear in the transcript, so a correct quote carrying an altered number is
+  // rejected too.
+  const amounts = (output.amounts ?? [])
+    .filter((a) => spanAppearsIn(input.transcript, a.source_span)
+      && spanAppearsIn(input.transcript, a.amount))
+    .slice(0, MAX_AMOUNTS);
+
+  return { commitments, amounts, flagged, dropped };
 }

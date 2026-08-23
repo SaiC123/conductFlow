@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveTemplate, type TemplateRole, type ResolvedTemplate } from "@/lib/google/templates";
 import { fillTemplate, tokenMatchesIn, describeMissing } from "./tokens";
-import { describeMoneyTokens } from "./values";
+import { moneyPassThroughFor } from "./values";
 import type { DocsWriteClient, CreatedDocument } from "@/lib/google/docs";
 import type { CalendarWriteClient, CreatedEvent } from "@/lib/google/calendar-write";
 
@@ -61,12 +61,13 @@ export async function generateDocument(
   }
 
   const text = await deps.readTemplate(template);
-  const filled = fillTemplate(text, args.values);
+  const values = withMoneyPassThrough(text, args.values);
+  const filled = fillTemplate(text, values);
   if (!filled.ok) {
     return {
       ok: false,
       reason: "missing_tokens",
-      detail: blockedDetail(template.name, filled.missing),
+      detail: `"${template.name}" was not used: ${describeMissing(filled.missing)}.`,
       missing: filled.missing,
     };
   }
@@ -79,7 +80,7 @@ export async function generateDocument(
   const document = await deps.docs.copyTemplate(template.fileId, args.title);
   await deps.docs.replaceTokens(document.id, tokenMatchesIn(text).map(({ literal, name }) => ({
     literal,
-    value: String(args.values[name]).trim(),
+    value: String(values[name]).trim(),
   })));
 
   return { ok: true, document };
@@ -108,12 +109,12 @@ export async function generateCalendarEvent(
   }
 
   const text = await deps.readTemplate(template);
-  const filled = fillTemplate(text, args.values);
+  const filled = fillTemplate(text, withMoneyPassThrough(text, args.values));
   if (!filled.ok) {
     return {
       ok: false,
       reason: "missing_tokens",
-      detail: blockedDetail(template.name, filled.missing),
+      detail: `"${template.name}" was not used: ${describeMissing(filled.missing)}.`,
       missing: filled.missing,
     };
   }
@@ -137,11 +138,9 @@ export async function generateCalendarEvent(
 }
 
 /**
- * A money token gets its own sentence. Telling an owner that `{{fee}}` "was not established
- * by this conversation" sends them looking for a field to fill in that does not exist.
+ * A money token stands for itself, so a template quoting a fee still produces a document
+ * with the placeholder left visible rather than refusing to produce one at all.
  */
-function blockedDetail(templateName: string, missing: string[]): string {
-  const money = describeMoneyTokens(missing);
-  const base = `"${templateName}" was not used: ${describeMissing(missing)}.`;
-  return money ? `${base} ${money}` : base;
+function withMoneyPassThrough(template: string, values: TokenValues): TokenValues {
+  return { ...moneyPassThroughFor(tokenMatchesIn(template)), ...values };
 }

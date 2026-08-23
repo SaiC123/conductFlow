@@ -1,4 +1,4 @@
-import type { ExtractedCommitment } from "@/lib/agent/schema";
+import type { ExtractedCommitment, ExtractedAmount } from "@/lib/agent/schema";
 import type { TokenValues } from "./generate";
 
 /**
@@ -19,6 +19,26 @@ export function isMoneyToken(name: string): boolean {
   return MONEY_TOKENS.includes(name.toLowerCase());
 }
 
+/**
+ * Money tokens resolve to their own literal text, so `{{fee}}` survives into the finished
+ * document instead of blocking it.
+ *
+ * ConductFlow still has no rate, price or currency anywhere, so this is not the model
+ * inventing a figure — it is the template's own placeholder passing through untouched, left
+ * where an owner will see it and type the number in. That is a deliberate exception to the
+ * block-on-missing rule: a proposal missing a *date* is wrong in a way the reader cannot
+ * see, whereas one still showing `{{fee}}` is obviously unfinished.
+ *
+ * Temporary. When ConductFlow can record amounts, these become real values and this goes.
+ */
+export function moneyPassThroughFor(matches: { literal: string; name: string }[]): TokenValues {
+  const passed: TokenValues = {};
+  for (const { literal, name } of matches) {
+    if (isMoneyToken(name)) passed[name] = literal;
+  }
+  return passed;
+}
+
 /** Reads as a sentence an owner can act on, rather than as a missing-value complaint. */
 export function describeMoneyTokens(missing: string[]): string | null {
   const money = missing.filter(isMoneyToken);
@@ -35,6 +55,8 @@ export interface ValueSource {
   /** The date typed into /ingest, YYYY-MM-DD. */
   occurredAt: string;
   commitments: ExtractedCommitment[];
+  /** Already verified verbatim against the transcript by lib/agent/extract.ts. */
+  amounts?: ExtractedAmount[];
   /** Resolved by the caller from the org's timezone, so this stays pure. */
   today: string;
 }
@@ -72,6 +94,14 @@ export function buildTokenValues(source: ValueSource): TokenValues {
     // start "on " reads worse than one that refused to generate.
     next_deadline: withDeadlines[0]?.deadline ?? null,
     owners: owners.length > 0 ? owners.join(", ") : null,
+
+    // Every figure someone actually said, labelled, one per line. A single token rather than
+    // {{monthly_fee}}-style named ones because nothing here decides which figure is "the
+    // price": a transcript that proposes $600 and settles on $400 would let a wrong mapping
+    // put the rejected number on a page a client reads. A list cannot make that mistake.
+    amounts: (source.amounts ?? []).length > 0
+      ? (source.amounts ?? []).map((a) => `• ${a.label}: ${a.amount}`).join("\n")
+      : null,
   };
 }
 
@@ -79,5 +109,5 @@ export function buildTokenValues(source: ValueSource): TokenValues {
 export const AVAILABLE_TOKENS = [
   "client_name", "conversation_title", "conversation_date", "today",
   "commitment_count", "commitment_list", "commitment_summary",
-  "next_deadline", "owners",
+  "next_deadline", "owners", "amounts",
 ] as const;

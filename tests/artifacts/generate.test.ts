@@ -87,7 +87,7 @@ describe("generateDocument", () => {
   // leave an empty document in the owner's Drive for somebody to notice and delete.
   it("creates nothing at all when a token has no value", async () => {
     const orgId = await orgWithTemplate("proposal");
-    const { deps, calls } = spyDeps("Fee is {{fee}}");
+    const { deps, calls } = spyDeps("Starts {{start_date}}");
 
     const r = await generateDocument(db, orgId, {
       role: "proposal", title: "t", values: { client_name: "Acme" },
@@ -96,7 +96,7 @@ describe("generateDocument", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.reason).toBe("missing_tokens");
-      expect(r.missing).toEqual(["fee"]);
+      expect(r.missing).toEqual(["start_date"]);
       expect(r.detail).toContain("Proposal template");
     }
     expect(calls.copied).toHaveLength(0);

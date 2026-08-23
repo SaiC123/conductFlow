@@ -156,3 +156,48 @@ describe("extractCommitments", () => {
     await expect(extractCommitments({ transcript: TRANSCRIPT, ...base }, broken)).rejects.toThrow();
   });
 });
+
+const MONEY_TRANSCRIPT =
+  "Jordan: The revised package would remain $1,250 per month. "
+  + "Maya: Could we start at $400 and reevaluate after the first month?";
+
+describe("extractCommitments amounts", () => {
+  const money = { conversationDate: "2026-08-20", clientName: "BrightPath" };
+
+  it("keeps a figure whose quote and value both appear verbatim", async () => {
+    const model = mockReturning({ commitments: [], amounts: [
+      { label: "monthly services", amount: "$1,250 per month",
+        source_span: "The revised package would remain $1,250 per month" },
+    ] });
+    const r = await extractCommitments({ transcript: MONEY_TRANSCRIPT, ...money }, model);
+    expect(r.amounts).toHaveLength(1);
+    expect(r.amounts[0].amount).toBe("$1,250 per month");
+  });
+
+  // Unlike a commitment, an unverifiable figure is dropped rather than downgraded. It is a
+  // number nobody said, heading for a document a client may read.
+  it("drops a figure that was never stated", async () => {
+    const model = mockReturning({ commitments: [], amounts: [
+      { label: "setup fee", amount: "$5,000",
+        source_span: "There is a $5,000 setup fee" },
+    ] });
+    const r = await extractCommitments({ transcript: MONEY_TRANSCRIPT, ...money }, model);
+    expect(r.amounts).toEqual([]);
+  });
+
+  // The dangerous case: a real quote carrying an altered number.
+  it("drops a figure whose quote is real but whose value was changed", async () => {
+    const model = mockReturning({ commitments: [], amounts: [
+      { label: "monthly services", amount: "$2,500 per month",
+        source_span: "The revised package would remain $1,250 per month" },
+    ] });
+    const r = await extractCommitments({ transcript: MONEY_TRANSCRIPT, ...money }, model);
+    expect(r.amounts).toEqual([]);
+  });
+
+  it("returns an empty list when no money was discussed", async () => {
+    const model = mockReturning({ commitments: [], amounts: [] });
+    const r = await extractCommitments({ transcript: TRANSCRIPT, ...base }, model);
+    expect(r.amounts).toEqual([]);
+  });
+});

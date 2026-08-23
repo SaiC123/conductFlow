@@ -236,7 +236,8 @@ async function finishIngest(
   const artifacts = await generateArtifactsForConversation(db, {
     orgId: ctx.orgId, conversationId: ctx.conversationId, clientName: ctx.clientName,
     title: ctx.title, occurredAt: ctx.occurredAt,
-    commitments: extracted.commitments, contract: ctx.contract,
+    commitments: extracted.commitments, amounts: extracted.amounts,
+    contract: ctx.contract,
   });
 
   await logAudit({

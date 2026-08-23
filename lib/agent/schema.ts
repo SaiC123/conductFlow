@@ -16,8 +16,25 @@ export const commitmentSchema = z.object({
   source_span: z.string().min(1).describe("Verbatim quote from the transcript that states this promise."),
 });
 
+export const MAX_AMOUNTS = 20;
+
+/**
+ * A figure someone actually said, carried through as text.
+ *
+ * `amount` is a verbatim string rather than a number on purpose. ConductFlow does no
+ * arithmetic on money and has no currency, rounding or tax model to do it correctly with;
+ * parsing "$1,250 per month" into 1250 would throw away the part a reader needs. The only
+ * job here is to repeat what was said, attributably.
+ */
+export const amountSchema = z.object({
+  label: z.string().min(1).describe("What the figure is for, in a few words. E.g. 'monthly services'."),
+  amount: z.string().min(1).describe("The figure exactly as stated, including the currency symbol. E.g. '$1,250 per month'."),
+  source_span: z.string().min(1).describe("Verbatim quote from the transcript stating this figure."),
+});
+
 export const extractionSchema = z.object({
   commitments: z.array(commitmentSchema),
+  amounts: z.array(amountSchema).default([]),
 });
 
 export const draftSchema = z.object({
@@ -28,4 +45,5 @@ export const draftSchema = z.object({
 export type ExtractedCommitment = z.infer<typeof commitmentSchema> & {
   span_verified: boolean;
 };
+export type ExtractedAmount = z.infer<typeof amountSchema>;
 export type GeneratedDraft = z.infer<typeof draftSchema>;
