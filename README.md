@@ -190,6 +190,10 @@ sign-in button, and an org that has connected nothing simply gets plainer drafts
 3. Generate `DATA_SOURCE_KEK`:
    `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
    Without it, connecting a data source fails and everything else keeps working.
+   Replacing that key later is `POST /api/cron/kek-rewrap`, which re-wraps each grant's data
+   key under the incoming KEK and never decrypts a refresh token to do it. It is deliberately
+   not on a schedule — rotation is an operator action — and
+   `docs/google-enablement-runbook.md` §10 gives the order the env vars have to move in.
 4. Restricted Gmail scopes need Google verification plus a CASA assessment before more
    than 100 users can consent. Fine for a pilot; plan for it before launch.
 

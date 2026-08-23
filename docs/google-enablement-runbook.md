@@ -1,6 +1,6 @@
 # Google Enablement Runbook
 
-**Accurate as of:** 2026-08-12.
+**Accurate as of:** 2026-08-23.
 **For:** the session where Google Cloud Console access is available and the goal is to get every
 Google-dependent capability live with the least wasted time.
 
@@ -410,7 +410,93 @@ Genuinely unrelated to Google, and still open:
 - Waitlist signups have no rate limiting — `lib/limits/rate-limit.ts` keys on `org_id` and a
   stranger has no org. Honeypot, unique email index and length caps only.
 - Unbounded full-table reads on the ingest path (`lib/ingest/run.ts`).
-- KEK rotation: `kek_version` and a `DATA_SOURCE_KEK_PREVIOUS` fallback exist, but no `rewrap()` job
-  does, so 3A done-criterion 8 is still unmet.
 - Switching `EXTRACTION_MODEL` to `anthropic/claude-sonnet-5` — the better model for this job and the
   single biggest quality lever. Needs paid AI Gateway credit. **Costs money; ask first.**
+
+---
+
+## 10. Rotating the data-source KEK
+
+3A done-criterion 8. The `rewrap()` job exists (`lib/google/vault.ts`, `lib/google/rotate.ts`) and is
+driven by `POST /api/cron/kek-rewrap`, authorized by the same `CRON_SECRET` as the overdue sweep.
+
+It is **not** in `vercel.json`. Rotation is an operator action taken a handful of times in the
+product's life, always in step with an environment change made by hand; a nightly run would spend
+its time confirming there is nothing to do, and would fire unattended at exactly the moments — a
+half-applied env change, a mistyped key — when the right behaviour is to stop and be looked at.
+
+**What the job does and does not touch.** It unwraps each row's 32-byte data key with whichever
+configured KEK still opens it, wraps those same bytes under the incoming KEK, and writes
+`dek_sealed` and `kek_version`. It never decrypts a refresh token, never writes `token_sealed`, and
+never touches `updated_at` — `resolveGrant()` orders by `updated_at` to decide which connected
+account serves a scope, and a rewrap must not change whose token answers a request. A row it cannot
+open is reported and left byte-identical.
+
+**The order matters. Do not skip step 4.**
+
+1. **Mint the incoming key.**
+
+   ```
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   ```
+
+2. **Note the version you are moving to.** `DATA_SOURCE_KEK_VERSION` defaults to `1` — the value
+   every row written before rotation existed already carries. If you have never rotated, the target
+   is `2`. Otherwise it is `vercel env pull` and read the current value, plus one.
+
+3. **Set all three variables in one deploy, in this order of meaning:** the old key becomes
+   `DATA_SOURCE_KEK_PREVIOUS`, the new key becomes `DATA_SOURCE_KEK`, and the version is raised.
+
+   ```
+   vercel env rm  DATA_SOURCE_KEK_PREVIOUS production      # if a stale one is left over
+   vercel env add DATA_SOURCE_KEK_PREVIOUS production      # paste the OLD key
+   vercel env rm  DATA_SOURCE_KEK production
+   vercel env add DATA_SOURCE_KEK production               # paste the NEW key
+   vercel env rm  DATA_SOURCE_KEK_VERSION production       # if it already exists
+   vercel env add DATA_SOURCE_KEK_VERSION production       # the number from step 2
+   vercel deploy --prod
+   ```
+
+   Between this deploy and step 4 the table is half rewrapped, and that is fine:
+   `openRefreshToken()` tries the current key and then the previous one, so every Google capability
+   keeps working throughout. Raising `DATA_SOURCE_KEK` without setting `DATA_SOURCE_KEK_PREVIOUS`
+   first is the one move that breaks every existing grant — the old key is then nowhere in the
+   deployment and no row can be opened.
+
+4. **Run the rewrap until it says it is done.** Canary one org first if you like (`&orgId=…`):
+
+   ```
+   curl -s -X POST -H "authorization: Bearer $CRON_SECRET" \
+     "https://conductflow-sooty.vercel.app/api/cron/kek-rewrap?batchSize=100&maxRows=500"
+   ```
+
+   The reply is the report. `done: true` with `failures: []` means the table is fully on the new
+   key. `done: false` means the invocation hit its `maxRows` budget — call again passing
+   `&cursor=<the cursor from the reply>`, or just call again with no cursor, which is equally
+   correct and only re-reads rows that are already current. HTTP **207** means at least one grant
+   was left behind.
+
+5. **Confirm before you retire anything.** The job is the source of truth, but check the table too:
+
+   ```sql
+   select kek_version, count(*) from connected_data_source group by 1;
+   ```
+
+   Every row must be at the new version. Anything still on the old one is either unopenable — look
+   for `data_source:<id>:rewrap-failed` in `audit_event`, and for `[conductflow] rewrapDataSources`
+   in the Vercel runtime logs — or was reconnected mid-run and is already current under a different
+   version stamp. Re-run the job; if a row will not move, that grant's ciphertext is damaged and the
+   fix is for the owner to reconnect the account on `/settings`, not to edit the row.
+
+6. **Only then retire the outgoing key.**
+
+   ```
+   vercel env rm DATA_SOURCE_KEK_PREVIOUS production
+   vercel deploy --prod
+   ```
+
+   Deleting it while a single row is still behind makes that row permanently unreadable. There is no
+   recovery; the owner must reconnect.
+
+**Locally**, the same variables live in `.env.local` and the same order applies. `npm test` covers
+the job itself (`tests/google/vault.test.ts`, `tests/google/rotate.test.ts`) against local Supabase.

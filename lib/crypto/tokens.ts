@@ -28,6 +28,24 @@ function resolveKey(key?: Buffer): Buffer {
   return decoded;
 }
 
+/**
+ * Whether a stored string still has the shape this module writes — version tag, then an IV
+ * and an auth tag of the right lengths, then a body. It says nothing about the key or the
+ * plaintext and is no substitute for decrypting. It exists for the one caller that has to
+ * judge a ciphertext it is deliberately not opening: the rotation job rewraps data keys and
+ * leaves sealed tokens alone, so a token mangled by some earlier accident would otherwise
+ * ride quietly into the new key instead of being reported.
+ */
+export function looksSealed(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const parts = value.split(SEPARATOR);
+  if (parts.length !== 4) return false;
+  const [version, ivPart, tagPart, bodyPart] = parts;
+  if (version !== VERSION || bodyPart.length === 0) return false;
+  return Buffer.from(ivPart, "base64url").length === IV_BYTES
+    && Buffer.from(tagPart, "base64url").length === TAG_BYTES;
+}
+
 export function encryptToken(plaintext: string, key?: Buffer, aad?: string): string {
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv("aes-256-gcm", resolveKey(key), iv);
