@@ -22,7 +22,11 @@ export function GenerateDraftButton({ commitmentId, hasDraft }:
           onClick={() => {
             setError(null);
             startTransition(async () => {
-              try { await regenerateDraft(commitmentId); router.refresh(); }
+              try {
+                const refused = await regenerateDraft(commitmentId);
+                if (refused?.error) setError(refused.error);
+                else router.refresh();
+              }
               catch (e) { setError(e instanceof Error ? e.message : "Drafting failed."); }
             });
           }}

@@ -176,6 +176,43 @@ describe("agent_blueprint is owner-only", () => {
   });
 });
 
+describe("drive_template is org-scoped and never deleted", () => {
+  // The suite never resets, and there is no delete path, so every insert claims a fresh id.
+  const fileId = () => `picker-test-${crypto.randomUUID()}`;
+
+  it("an org member records a picked file and reads it back", async () => {
+    const a = client(await jwt(userA));
+    const id = fileId();
+    const { error } = await a.from("drive_template").insert({
+      org_id: orgA, file_id: id, name: "Follow-up template", mime_type: "text/plain" });
+    expect(error).toBeNull();
+
+    const { data } = await a.from("drive_template").select("file_id,state").eq("file_id", id);
+    expect(data).toHaveLength(1);
+    expect(data![0].state).toBe("active");
+  });
+
+  it("user in org B cannot read org A's templates", async () => {
+    const b = client(await jwt(userB));
+    const { data } = await b.from("drive_template").select("id").eq("org_id", orgA);
+    expect(data).toEqual([]);
+  });
+
+  it("an outsider cannot attach a file to org A", async () => {
+    const b = client(await jwt(userB));
+    const { error } = await b.from("drive_template").insert({
+      org_id: orgA, file_id: fileId(), name: "Planted template", mime_type: "text/plain" });
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe("42501");
+  });
+
+  it("no role may delete a template record — forgetting is a state change", async () => {
+    const a = client(await jwt(userA));
+    const { error } = await a.from("drive_template").delete().eq("org_id", orgA);
+    expect(error).not.toBeNull();
+  });
+});
+
 describe("audit_event is append-only", () => {
   it("an org member can insert and read audit rows", async () => {
     const a = client(await jwt(userA));

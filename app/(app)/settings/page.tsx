@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { getCurrentOrgId } from "@/lib/db/queries";
 import { getServerClient } from "@/lib/db/server";
+import { readEnv } from "@/lib/env";
 import { CAPABILITIES, type Capability } from "@/lib/google/scopes";
+import { DRIVE_FILE_SCOPE } from "@/lib/google/picker";
 import { ConnectionList } from "@/components/settings/ConnectionList";
+import { DriveTemplates, type DriveTemplateRow } from "@/components/settings/DriveTemplates";
 import {
   PageHeader, Card, CardTitle, EmptyState, SectionHeading, buttonStyle, pageStyle,
 } from "@/components/ui/primitives";
@@ -46,6 +49,18 @@ export default async function SettingsPage({ searchParams }:
     connected: CAPABILITIES[key].scopes.every((s) => granted.has(s)),
   }));
 
+  // What the org has actually handed over. Without this list the Drive capability is a
+  // green badge over an empty set, which is the thing this screen exists to prevent.
+  const { data: templateData } = await db.from("drive_template")
+    .select("id,file_id,name,mime_type,created_at")
+    .eq("org_id", orgId).eq("state", "active")
+    .order("created_at", { ascending: false });
+
+  // The grant must land on the account the server holds a refresh token for, so the picker
+  // is told which one that is.
+  const driveAccount = rows.find((r) => r.state === "active"
+    && r.scopes.includes(DRIVE_FILE_SCOPE))?.account_email ?? null;
+
   return (
     <main style={pageStyle}>
       <div style={column}>
@@ -75,6 +90,21 @@ export default async function SettingsPage({ searchParams }:
 
       <SectionHeading>Google capabilities</SectionHeading>
       <ConnectionList capabilities={capabilities} connections={rows} />
+
+      <div style={{ marginTop: "var(--space-7)" }}>
+        <SectionHeading note={`${(templateData ?? []).length} handed over`}>
+          Drive templates
+        </SectionHeading>
+      </div>
+      {/* Both values are browser-safe by design: the OAuth client id is public, and a
+          browser API key is restricted by HTTP referrer rather than kept secret. */}
+      <DriveTemplates
+        templates={(templateData ?? []) as DriveTemplateRow[]}
+        accountEmail={driveAccount}
+        driveConnected={granted.has(DRIVE_FILE_SCOPE)}
+        clientId={readEnv("NEXT_PUBLIC_GOOGLE_CLIENT_ID") ?? null}
+        developerKey={readEnv("NEXT_PUBLIC_GOOGLE_PICKER_API_KEY") ?? null}
+      />
 
       <div style={{ marginTop: "var(--space-7)" }}>
         <SectionHeading>Permissions</SectionHeading>

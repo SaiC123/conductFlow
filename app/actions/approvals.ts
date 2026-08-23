@@ -5,7 +5,9 @@ import { executeAction } from "@/lib/agent/execute";
 import { canExecute } from "@/lib/agent/execute-policy";
 import { contractFor } from "@/lib/agent/blueprint-store";
 import { pushDraftToGmail } from "@/lib/gmail/push";
-import { getAccessToken, DataSourceUnavailable } from "@/lib/google/tokens";
+import {
+  getAccessToken, getConnectedAccountEmail, DataSourceUnavailable,
+} from "@/lib/google/tokens";
 import { CAPABILITIES } from "@/lib/google/scopes";
 import { logAudit } from "@/lib/audit/log";
 import { revalidatePath } from "next/cache";
@@ -75,12 +77,11 @@ export async function pushApprovedDraft(
 
   try {
     const token = await getAccessToken(service, orgId, GMAIL_COMPOSE_SCOPE);
-    const { data: source } = await service.from("connected_data_source")
-      .select("account_email").eq("org_id", orgId).eq("provider", "google").maybeSingle();
+    const from = await getConnectedAccountEmail(service, orgId, GMAIL_COMPOSE_SCOPE);
 
     const result = await pushDraftToGmail(service, {
       draftId: draft.id as string, userId,
-      from: (source?.account_email as string | undefined) ?? "me",
+      from: from ?? "me",
       accessToken: token,
     });
     return { pushed: result.outcome === "pushed" || result.outcome === "recreated",

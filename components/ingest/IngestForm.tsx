@@ -64,7 +64,12 @@ export function IngestForm({ clients }: { clients: ClientContact[] }) {
       action={(fd) => {
         setError(null);
         startTransition(async () => {
-          try { await ingestTranscript(fd); }
+          // A refusal comes back as data, not as a throw: Next redacts thrown messages
+          // in production, and the reason is the whole point of a refusal.
+          try {
+            const refused = await ingestTranscript(fd);
+            if (refused?.error) setError(refused.error);
+          }
           catch (e) { setError(e instanceof Error ? e.message : "Something went wrong."); }
         });
       }}

@@ -18,6 +18,23 @@ export interface IngestArgs {
   title: string; occurredAt: string; transcript: string;
 }
 
+// The exception checks further down (lib/ops/map.ts, lib/ops/exceptions.ts) read the org's
+// whole commitment and task history, plus one client's history, on every single ingest. Left
+// unbounded that is a full-table scan that gets slower and heavier with every conversation an
+// org ever records. Ordering by recency and capping at this many rows keeps the cost fixed
+// while satisfying every threshold the checks apply — OPERATIONS_MAP_MIN_COMMITMENTS (20) and
+// the exception module's MIN_TYPE_SAMPLE/MIN_CLIENT_HISTORY/MIN_PRIOR_CONVERSATIONS (3-5) all
+// clear comfortably below it — so an org whose history fits under the limit sees no change at
+// all. An org that has grown past it gets a check grounded in its most recent activity instead
+// of its entire past, which is the right trade for a best-effort, per-ingest sanity check.
+export const INGEST_STATS_ROW_LIMIT = 500;
+
+// Only the columns lib/ops/map.ts and lib/ops/exceptions.ts actually read off these rows —
+// see buildOperationsMap and detectExceptions/unusualTypesForClient/countsByConversation.
+const ORG_COMMITMENT_STATS_COLUMNS = "type,owner,deadline,status,client_id,created_at";
+const ORG_TASK_STATS_COLUMNS = "status,created_at,completed_at,due";
+const CLIENT_HISTORY_COLUMNS = "conversation_id,type";
+
 export interface IngestResult {
   conversationId: string; transcriptId: string;
   commitmentCount: number; draftCount: number;
@@ -159,9 +176,13 @@ async function finishIngest(
   try {
     const [{ data: orgCommitments }, { data: orgTasks }, { data: clientHistory }] =
       await Promise.all([
-        db.from("commitment").select("*").eq("org_id", ctx.orgId),
-        db.from("task").select("*").eq("org_id", ctx.orgId),
-        db.from("commitment").select("*").eq("org_id", ctx.orgId).eq("client_id", ctx.clientId),
+        db.from("commitment").select(ORG_COMMITMENT_STATS_COLUMNS).eq("org_id", ctx.orgId)
+          .order("created_at", { ascending: false }).limit(INGEST_STATS_ROW_LIMIT),
+        db.from("task").select(ORG_TASK_STATS_COLUMNS).eq("org_id", ctx.orgId)
+          .order("created_at", { ascending: false }).limit(INGEST_STATS_ROW_LIMIT),
+        db.from("commitment").select(CLIENT_HISTORY_COLUMNS)
+          .eq("org_id", ctx.orgId).eq("client_id", ctx.clientId)
+          .order("created_at", { ascending: false }).limit(INGEST_STATS_ROW_LIMIT),
       ]);
 
     const map = buildOperationsMap({
