@@ -23,13 +23,13 @@ export const EDITABLE_ACTIONS = [
   "propose_recurring_task",
   "push_email_draft",
   "edit_crm",
+  // Artifact generation. Both write into the owner's own Google account and neither reaches
+  // a client: a copied Doc sits in the owner's Drive, and a created event carries no guests
+  // (see lib/google/calendar-write.ts, which never sends an attendee list). Sending remains
+  // send_external_email, which is hard-prohibited.
+  "draft_client_document",
+  "create_calendar_event",
 ] as const;
-
-/**
- * These reach a customer or an outside system. An org may decide *whether* the agent does
- * them at all, but never that it does them unattended.
- */
-export const ALWAYS_NEEDS_APPROVAL = ["push_email_draft", "edit_crm"] as const;
 
 export type EditableAction = (typeof EDITABLE_ACTIONS)[number];
 
@@ -45,7 +45,12 @@ export interface BlueprintRow {
 /** What a new org starts with: draft freely, ask before anything else. */
 export const DEFAULT_BLUEPRINT: BlueprintRow = {
   allowed_sources: ["transcript", "client_contact", "template"],
-  permitted_actions: ["draft_recap", "draft_task_list", "draft_follow_up"],
+  // The two artifact actions ship on. Neither reaches a client — a copied Doc lands in the
+  // owner's own Drive and an event carries no guests — and an org that bound a template in
+  // Settings has already said what it wants built. An owner who disagrees turns them off in
+  // the same screen, which is the whole point of the blueprint.
+  permitted_actions: ["draft_recap", "draft_task_list", "draft_follow_up",
+    "draft_client_document", "create_calendar_event"],
   required_approvals: ["push_email_draft", "edit_crm", "create_internal_task",
     "propose_recurring_task"],
   escalation_conditions: ["complaint", "legal_concern", "missing_owner_or_deadline"],
@@ -58,24 +63,15 @@ export const DEFAULT_BLUEPRINT: BlueprintRow = {
  * rather than read from the row, and canExecute checks prohibitions first — so a
  * permitted_actions entry naming a prohibited action loses.
  *
- * ALWAYS_NEEDS_APPROVAL is re-applied here too, not only in validateBlueprintEdit: a row
- * that never passed through the editor — a forged PostgREST insert, say — cannot grant an
- * external action unattended. It is demoted to approval-gated at read time.
+ * HARD_PROHIBITED is the only limit applied at read time. Approval is entirely the owner's
+ * call: any editable action may be run unattended if the blueprint says so, including the
+ * ones that reach a customer. Nothing is demoted here.
  */
 export function blueprintToContract(row: BlueprintRow): AgentContract {
   const prohibited = HARD_PROHIBITED as readonly string[];
-  const alwaysApproval = ALWAYS_NEEDS_APPROVAL as readonly string[];
 
-  const permitted = row.permitted_actions.filter(
-    (a) => !prohibited.includes(a) && !alwaysApproval.includes(a));
-
-  // An always-approval action the row tried to grant unattended is demoted, not dropped:
-  // dropping it would make canExecute answer "unknown_action" and deny an action the owner
-  // legitimately enabled. The row loses the "unattended" part of its claim, nothing more.
-  const demoted = row.permitted_actions.filter(
-    (a) => !prohibited.includes(a) && alwaysApproval.includes(a));
-
-  const required = [...new Set([...row.required_approvals, ...demoted])]
+  const permitted = row.permitted_actions.filter((a) => !prohibited.includes(a));
+  const required = [...new Set(row.required_approvals)]
     .filter((a) => !prohibited.includes(a));
 
   return {
@@ -110,9 +106,6 @@ export function validateBlueprintEdit(row: Omit<BlueprintRow, "allowed_sources">
   for (const action of row.permitted_actions) {
     if (row.required_approvals.includes(action)) {
       return { ok: false, error: `"${action}" cannot be both unattended and approval-gated.` };
-    }
-    if ((ALWAYS_NEEDS_APPROVAL as readonly string[]).includes(action)) {
-      return { ok: false, error: `"${action}" reaches someone outside the team and always needs approval.` };
     }
   }
 

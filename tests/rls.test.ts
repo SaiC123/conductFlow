@@ -133,20 +133,17 @@ describe("agent_blueprint is owner-only", () => {
     expect(error).toBeNull();
   });
 
-  it("not even an owner may grant an unattended external action", async () => {
-    const a = client(await jwt(userA));
-    const { error } = await a.from("agent_blueprint").insert({
-      org_id: orgA, version: 9003,
-      allowed_sources: ["transcript"],
-      permitted_actions: ["push_email_draft"],
-      required_approvals: [],
-      escalation_conditions: ["complaint"],
-      success_metric: "follow_up_sent_within_24h",
-      expires_in_minutes: 60,
-    });
-    expect(error).not.toBeNull();
-    expect(error!.code).toBe("23514");
-  });
+  // The case that used to sit here asserted agent_blueprint_no_unattended_external, the CHECK
+  // that refused an unattended customer-facing action. Migration 0018 dropped it — approval
+  // is the owner's decision for every editable action now — so the case could no longer pass.
+  //
+  // It is deliberately not rewritten as "the insert succeeds". This file covers RLS policies,
+  // and any blueprint row written for org A wins loadBlueprint's ordering for every suite
+  // running against that org in parallel, which made the ingest and drafts suites fail
+  // intermittently with "action denied: turned_off". The new behaviour is covered where it
+  // cannot poison a shared org: tests/agent/blueprint-store.test.ts for the write path, and
+  // tests/agent/blueprint-sql.test.ts for the migration. The hard-prohibited CHECK, which is
+  // still enforced, is asserted immediately below.
 
   it("not even an owner may name a hard-prohibited action", async () => {
     const a = client(await jwt(userA));

@@ -6,6 +6,7 @@ import { canExecute } from "@/lib/agent/execute-policy";
 import { contractFor } from "@/lib/agent/blueprint-store";
 import { logAudit } from "@/lib/audit/log";
 import { contextForOrg } from "@/lib/google/draft-context";
+import { generateArtifactsForConversation } from "@/lib/artifacts/for-ingest";
 import { detectEscalations } from "@/lib/agent/escalate";
 import { detectExceptions } from "@/lib/ops/exceptions";
 import { buildOperationsMap } from "@/lib/ops/map";
@@ -21,6 +22,8 @@ export interface IngestArgs {
 export interface IngestResult {
   conversationId: string; transcriptId: string;
   commitmentCount: number; draftCount: number;
+  /** Google artifacts this conversation produced, and why any were skipped. */
+  documentUrl?: string | null; eventUrl?: string | null; artifactNotes?: string[];
   dropped: number; flagged: string[];
 }
 
@@ -48,7 +51,7 @@ export async function runIngest(
   return finishIngest(db, {
     orgId: args.orgId, clientId: args.clientId, clientName: args.clientName,
     conversationId: conversation.id, transcriptId: transcript.id,
-    transcript: args.transcript, occurredAt: args.occurredAt, contract,
+    transcript: args.transcript, occurredAt: args.occurredAt, title: args.title, contract,
   }, model);
 }
 
@@ -65,7 +68,7 @@ export async function retryExtractionFor(
   if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
 
   const { data: c } = await db.from("conversation")
-    .select("id,client_id,occurred_at").eq("id", t.conversation_id).single();
+    .select("id,client_id,occurred_at,title").eq("id", t.conversation_id).single();
   const { data: client } = await db.from("client_contact")
     .select("name").eq("id", c!.client_id).single();
 
@@ -84,14 +87,16 @@ export async function retryExtractionFor(
   return finishIngest(db, {
     orgId: t.org_id, clientId: c!.client_id, clientName: client?.name ?? "client",
     conversationId: t.conversation_id, transcriptId: t.id,
-    transcript: t.body, occurredAt: (c!.occurred_at as string).slice(0, 10), contract,
+    transcript: t.body, occurredAt: (c!.occurred_at as string).slice(0, 10),
+    title: (c!.title as string | null) ?? "Conversation", contract,
   }, model);
 }
 
 async function finishIngest(
   db: SupabaseClient,
   ctx: { orgId: string; clientId: string; clientName: string; conversationId: string;
-    transcriptId: string; transcript: string; occurredAt: string; contract: AgentContract },
+    transcriptId: string; transcript: string; occurredAt: string; title: string;
+    contract: AgentContract },
   model?: LanguageModel,
 ): Promise<IngestResult> {
   let extracted;
@@ -225,6 +230,15 @@ async function finishIngest(
   }
   const draftCount = drafts.filter((d) => d.status === "fulfilled").length;
 
+  // Google artifacts. Deliberately after the drafts and outside their Promise.allSettled:
+  // a document or an event is a consequence of the whole conversation, not of one promise,
+  // and it must not be attempted once per commitment. Never throws — see the module note.
+  const artifacts = await generateArtifactsForConversation(db, {
+    orgId: ctx.orgId, conversationId: ctx.conversationId, clientName: ctx.clientName,
+    title: ctx.title, occurredAt: ctx.occurredAt,
+    commitments: extracted.commitments, contract: ctx.contract,
+  });
+
   await logAudit({
     orgId: ctx.orgId, actor: "agent", action: "draft",
     target: `transcript:${ctx.transcriptId}:extract`,
@@ -234,5 +248,7 @@ async function finishIngest(
     conversationId: ctx.conversationId, transcriptId: ctx.transcriptId,
     commitmentCount: pairs.length, draftCount,
     dropped: extracted.dropped, flagged: extracted.flagged,
+    documentUrl: artifacts.documentUrl, eventUrl: artifacts.eventUrl,
+    artifactNotes: artifacts.blocked,
   };
 }
