@@ -5,11 +5,15 @@ import { getServerClient } from "@/lib/db/server";
 import { getCurrentOrgId } from "@/lib/db/queries";
 import { parseTranscriptFile } from "@/lib/parse/transcript";
 import { runIngest, retryExtractionFor } from "@/lib/ingest/run";
+import { guardLlmBudget } from "@/lib/limits/rate-limit";
 
 export async function ingestTranscript(formData: FormData) {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to add a transcript.");
   const db = await getServerClient();
+  // Charged before the transcript is written, so a refused run leaves nothing half-done.
+  const refused = await guardLlmBudget(db, orgId, "ingest_transcript");
+  if (refused) return refused;
 
   const title = String(formData.get("title") ?? "").trim();
   const occurredAt = String(formData.get("occurredAt") ?? "").trim();
@@ -51,6 +55,9 @@ export async function retryExtraction(transcriptId: string) {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to retry.");
   const db = await getServerClient();
+  const refused = await guardLlmBudget(db, orgId, "retry_extraction");
+  if (refused) return refused;
+
   await retryExtractionFor(db, transcriptId);
   revalidatePath("/queue");
 }

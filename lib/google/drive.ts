@@ -1,6 +1,7 @@
 const DRIVE_FILES = "https://www.googleapis.com/drive/v3/files";
 const GOOGLE_DOC_MIME = "application/vnd.google-apps.document";
-const LIST_PAGE_SIZE = 50;
+/** Exported so a caller can tell "that was everything" from "that was one page". */
+export const LIST_PAGE_SIZE = 50;
 
 export interface DriveFile {
   id: string;
