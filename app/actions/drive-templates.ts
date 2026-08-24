@@ -4,10 +4,12 @@ import { getServerClient } from "@/lib/db/server";
 import { getServiceClient } from "@/lib/db/service";
 import { getCurrentOrgId } from "@/lib/db/queries";
 import { logAudit } from "@/lib/audit/log";
-import { getAccessToken } from "@/lib/google/tokens";
+import { getAccessToken, DataSourceUnavailable } from "@/lib/google/tokens";
 import { createDriveClient, LIST_PAGE_SIZE } from "@/lib/google/drive";
+import { createDocsWriteClient, GOOGLE_DOC_MIME } from "@/lib/google/docs";
 import { DRIVE_FILE_SCOPE, parsePickedFiles, type PickedFile } from "@/lib/google/picker";
-import { isTemplateRole } from "@/lib/google/templates";
+import { isTemplateRole, boundRoles } from "@/lib/google/templates";
+import { STARTER_TEMPLATES } from "@/lib/google/starter-templates";
 
 export interface RecordedPick {
   recorded: number;
@@ -72,6 +74,94 @@ export async function recordPickedTemplates(payload: unknown): Promise<RecordedP
     verified: unreadable !== null,
     unreadable: unreadable ?? [],
   };
+}
+
+export interface CreatedStarter {
+  role: string;
+  name: string;
+  /** Where the owner opens it to edit the wording. */
+  url: string;
+}
+
+export interface StarterResult {
+  created: CreatedStarter[];
+  /** Roles left alone because the org had already bound something to them. */
+  alreadyBound: string[];
+}
+
+/**
+ * Writes ConductFlow's own starter templates into the org's Drive and binds them.
+ *
+ * The Picker is the other way to get a template bound, and it depends on three things
+ * lining up in a Google Cloud Console — an OAuth client carrying the page's origin, a
+ * browser API key from the same project, and the Picker API enabled on it. When any of them
+ * is wrong the browser gets a bare `401 invalid_client` naming none of them, and an owner
+ * has no way forward from inside the product. This path needs none of it: the server
+ * already holds a `drive.file` token, and `drive.file` covers a file the app itself created.
+ *
+ * Deliberately additive. A role an org has already bound is left exactly as it is, so this
+ * can be pressed twice without quietly replacing somebody's own template.
+ */
+export async function createStarterTemplates(): Promise<StarterResult> {
+  const orgId = await getCurrentOrgId();
+  if (!orgId) throw new Error("Sign in to create starter templates.");
+
+  const db = await getServerClient();
+  const { data: auth } = await db.auth.getUser();
+  const userId = auth.user?.id ?? null;
+
+  const bound = await boundRoles(db, orgId);
+  const todo = STARTER_TEMPLATES.filter((t) => !bound[t.role]);
+  const alreadyBound = STARTER_TEMPLATES
+    .filter((t) => bound[t.role]).map((t) => t.role);
+  if (todo.length === 0) return { created: [], alreadyBound };
+
+  // The service client, because this is the same refresh-token-derived Drive access the
+  // ingest path uses. The rows below are still written as the signed-in user, so
+  // drive_template's RLS stays in the path for the part that touches the database.
+  let docs;
+  try {
+    docs = createDocsWriteClient(
+      await getAccessToken(getServiceClient(), orgId, DRIVE_FILE_SCOPE));
+  } catch (e) {
+    if (e instanceof DataSourceUnavailable) {
+      throw new Error("Connect Google Drive first — ConductFlow needs somewhere to put the"
+        + " templates. Use the Drive capability above.");
+    }
+    throw e;
+  }
+
+  const now = new Date().toISOString();
+  const created: CreatedStarter[] = [];
+
+  // Sequential on purpose. Two creates and two inserts is not worth a partial-failure story
+  // where one document exists in Drive with no row pointing at it.
+  for (const starter of todo) {
+    const document = await docs.createTextDocument(starter.name, starter.body);
+
+    const { error } = await db.from("drive_template").upsert({
+      org_id: orgId,
+      file_id: document.id,
+      name: document.name,
+      mime_type: GOOGLE_DOC_MIME,
+      picked_by: userId,
+      role: starter.role,
+      state: "active",
+      updated_at: now,
+    }, { onConflict: "org_id,file_id" });
+    if (error) throw error;
+
+    created.push({ role: starter.role, name: document.name, url: document.url });
+  }
+
+  await logAudit({
+    orgId, actor: "human", action: "create",
+    target: `drive_template:starter:${created.map((c) => c.role).join(",")}`,
+    payloadHash: userId ?? undefined,
+  });
+
+  revalidatePath("/settings");
+  return { created, alreadyBound };
 }
 
 /**

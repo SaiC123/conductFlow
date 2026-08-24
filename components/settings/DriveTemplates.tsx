@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  recordPickedTemplates, forgetDriveTemplate, setTemplateRole,
+  recordPickedTemplates, forgetDriveTemplate, setTemplateRole, createStarterTemplates,
 } from "@/app/actions/drive-templates";
 import {
   DRIVE_FILE_SCOPE, TEMPLATE_MIME_TYPES, mapPickedDocuments, isSelectableAsTemplate,
@@ -131,6 +131,7 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
   clientId, developerKey }: DriveTemplatesProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -171,6 +172,30 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
     }
   }
 
+  /**
+   * The way through when the picker is not available. Nothing here touches Google in the
+   * browser: the server creates the files with the Drive token it already holds, which is
+   * why this still works when `missing` is non-empty or the picker throws 401.
+   */
+  async function startFromScratch() {
+    setError(null); setNotice(null); setWarning(null); setStarting(true);
+    try {
+      const { created, alreadyBound } = await createStarterTemplates();
+      if (created.length === 0) {
+        setNotice(`Already covered — ${alreadyBound.join(" and ")} both have a template.`);
+      } else {
+        setNotice(`Created and bound ${created.map((c) => c.name).join(" and ")}`
+          + " in your Drive. Open them from Drive to edit the wording; the {{tokens}} are"
+          + " what get filled in.");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That did not work.");
+    } finally {
+      setStarting(false);
+    }
+  }
+
   async function forget(id: string) {
     setError(null); setNotice(null); setWarning(null); setBusyId(id);
     try {
@@ -207,6 +232,18 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
     </button>
   );
 
+  const starterRoles = ["proposal", "calendar"];
+  const needsStarters = starterRoles.some((role) => !templates.some((t) => t.role === role));
+
+  const starterButton = (
+    <button onClick={startFromScratch} disabled={starting || !driveConnected}
+      aria-busy={starting}
+      style={{ ...buttonStyle(missing.length > 0 ? "secondary" : "ghost",
+        starting || !driveConnected), minWidth: 148, flexShrink: 0 }}>
+      {starting ? "Creating…" : "Create starter templates"}
+    </button>
+  );
+
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between",
@@ -215,10 +252,14 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
           <CardTitle>Template files</CardTitle>
           <p style={{ color: "var(--muted)", marginTop: "var(--space-2)", maxWidth: "58ch" }}>
             ConductFlow can only read files you hand it, one at a time, through Google&rsquo;s
-            own picker. Nothing else in your Drive is ever visible to it.
+            own picker — or ones it wrote for you itself. Nothing else in your Drive is ever
+            visible to it.
           </p>
         </div>
-        {missing.length === 0 && driveConnected && pickButton}
+        <span style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+          {driveConnected && needsStarters && starterButton}
+          {missing.length === 0 && driveConnected && pickButton}
+        </span>
       </div>
 
       {missing.length > 0 && (
@@ -228,7 +269,9 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
           The picker is not configured on this deployment. Set{" "}
           <span className="mono" style={{ color: "var(--faint)" }}>{missing.join(" and ")}</span>{" "}
           and reload. Both are browser-safe values from the Google Cloud console — the OAuth
-          client id, and a browser API key with the Picker API enabled.
+          client id, and a browser API key from the <em>same</em> Google Cloud project with
+          the Picker API enabled. Meanwhile &ldquo;Create starter templates&rdquo; does not
+          use the picker at all and will still work.
         </p>
       )}
 
@@ -245,8 +288,10 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
         {templates.length === 0 ? (
           <EmptyState
             title="No files handed over yet"
-            body="ConductFlow can only read files you hand it. Until you pick one here, the Drive connection is granted and reads nothing at all — every follow-up is drafted without your templates."
-            action={missing.length === 0 && driveConnected ? pickButton : undefined}
+            body="ConductFlow can only read files you hand it. Until you pick one here — or let it write you a starting pair — the Drive connection is granted and reads nothing at all, and every follow-up is drafted without your templates."
+            action={driveConnected
+              ? (missing.length === 0 ? pickButton : starterButton)
+              : undefined}
           />
         ) : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
