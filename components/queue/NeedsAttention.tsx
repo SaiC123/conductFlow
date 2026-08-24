@@ -29,9 +29,14 @@ export function NeedsAttention({ items }: { items: FailedTranscript[] }) {
               padding: "var(--space-3) 0", borderTop: "1px solid var(--border)" }}>
               <span style={{ minWidth: 0 }}>
                 <span style={{ display: "block", fontWeight: 500 }}>{t.title}</span>
+                {/*
+                  Wrapped rather than truncated. This line is the entire reason the card
+                  exists, and a model or provider error says what it needs to say past the
+                  first forty characters.
+                */}
                 <span className="mono" style={{ display: "block", color: "var(--faint)",
                   fontSize: "var(--text-xs)", marginTop: "var(--space-1)",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  whiteSpace: "pre-wrap", wordBreak: "break-word", maxWidth: "68ch" }}>
                   {t.extraction_error ?? "unknown error"}
                 </span>
               </span>
@@ -45,7 +50,10 @@ export function NeedsAttention({ items }: { items: FailedTranscript[] }) {
                     try {
                       const refused = await retryExtraction(t.id);
                       if (refused?.error) setError(refused.error);
-                      else router.refresh();
+                      // Refreshed either way. A failed attempt rewrites the row's own error
+                      // text, and leaving the previous one on screen next to the new one
+                      // below is how an owner ends up debugging the wrong failure.
+                      router.refresh();
                     }
                     catch (e) { setError(e instanceof Error ? e.message : "Retry failed."); }
                   });

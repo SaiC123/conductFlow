@@ -20,13 +20,16 @@ export async function ingestTranscript(formData: FormData) {
   const occurredAt = String(formData.get("occurredAt") ?? "").trim();
   const pasted = String(formData.get("transcript") ?? "");
   const file = formData.get("file");
-  if (!title) throw new Error("Give the conversation a title.");
+  // Returned, like every other thing this action has to say to a person. Thrown, these
+  // reached production as "an error occurred… the specific message is omitted", which
+  // turned "give the conversation a title" into a dead end.
+  if (!title) return { error: "Give the conversation a title." };
 
   let text = pasted;
   if (file instanceof File && file.size > 0) {
     text = parseTranscriptFile(file.name, await file.text());
   }
-  if (!text.trim()) throw new Error("Paste a transcript or choose a file.");
+  if (!text.trim()) return { error: "Paste a transcript or choose a file." };
 
   let clientId = String(formData.get("clientId") ?? "");
   let clientName = "";
@@ -42,7 +45,7 @@ export async function ingestTranscript(formData: FormData) {
     if (error) throw error;
     clientId = data.id; clientName = data.name;
   } else {
-    if (!clientId) throw new Error("Choose a client, or add a new one.");
+    if (!clientId) return { error: "Choose a client, or add a new one." };
     const { data } = await db.from("client_contact").select("name").eq("id", clientId).single();
     clientName = data?.name ?? "client";
   }
@@ -55,7 +58,10 @@ export async function ingestTranscript(formData: FormData) {
     await runIngest(db, { orgId, clientId, clientName, title, occurredAt, transcript: text });
   } catch (e) {
     if (e instanceof UpstreamRateLimited) return { error: e.message };
-    throw e;
+    // An extraction that failed has left the transcript row behind carrying this same
+    // reason, and /queue offers it a Retry. An insert that failed left nothing. Either way
+    // the owner needs to be told which, and a redacted digest tells them neither.
+    return { error: e instanceof Error ? e.message : String(e) };
   }
   revalidatePath("/queue");
   redirect("/queue");
@@ -71,8 +77,16 @@ export async function retryExtraction(transcriptId: string) {
   try {
     await retryExtractionFor(db, transcriptId);
   } catch (e) {
+    // Every failure is returned, not thrown. Next redacts the message of anything thrown out
+    // of a Server Action in production and replaces it with "an error occurred… the specific
+    // message is omitted" — the least useful thing a retry button can say, on the one screen
+    // that exists to tell an owner why extraction failed. Nothing is left half-done:
+    // finishIngest records the reason on the transcript row before it rethrows. And this
+    // action is only reachable by a signed-in member of the org that owns the transcript.
     if (e instanceof UpstreamRateLimited) return { error: e.message };
-    throw e;
+    // Revalidated on the way out too, so the row's own error text updates to this attempt's.
+    revalidatePath("/queue");
+    return { error: e instanceof Error ? e.message : String(e) };
   }
   revalidatePath("/queue");
 }
