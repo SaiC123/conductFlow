@@ -251,16 +251,28 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
         <div style={{ minWidth: 0 }}>
           <CardTitle>Template files</CardTitle>
           <p style={{ color: "var(--muted)", marginTop: "var(--space-2)", maxWidth: "58ch" }}>
-            ConductFlow can only read files you hand it, one at a time, through Google&rsquo;s
-            own picker — or ones it wrote for you itself. Nothing else in your Drive is ever
-            visible to it.
+            Optional. Without one, documents and events are written from ConductFlow&rsquo;s
+            own wording. Bind a file here to use yours instead — either one you hand over
+            through Google&rsquo;s picker, or a starting pair ConductFlow writes for you.
+            Nothing else in your Drive is ever visible to it.
           </p>
         </div>
         <span style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
-          {driveConnected && needsStarters && starterButton}
+          {needsStarters && starterButton}
           {missing.length === 0 && driveConnected && pickButton}
         </span>
       </div>
+
+      {!driveConnected && (
+        <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)",
+          marginTop: "var(--space-4)", paddingTop: "var(--space-3)",
+          borderTop: "1px solid var(--border)", maxWidth: "62ch" }}>
+          Both buttons need the Drive capability above — ConductFlow has to have somewhere
+          to put a file. Connect &ldquo;Use our Drive templates&rdquo; and they turn on.
+          Calendar events do not need it: those are written from the built-in wording with
+          no Drive involvement at all.
+        </p>
+      )}
 
       {missing.length > 0 && (
         <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)",
@@ -275,23 +287,12 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
         </p>
       )}
 
-      {missing.length === 0 && !driveConnected && (
-        <p style={{ color: "var(--muted)", fontSize: "var(--text-sm)",
-          marginTop: "var(--space-4)", paddingTop: "var(--space-3)",
-          borderTop: "1px solid var(--border)", maxWidth: "62ch" }}>
-          Connect &ldquo;Use our Drive templates&rdquo; above first. The picker hands files to
-          the account ConductFlow is connected to, so there has to be one.
-        </p>
-      )}
-
       <div style={{ marginTop: "var(--space-4)" }}>
         {templates.length === 0 ? (
           <EmptyState
             title="No files handed over yet"
-            body="ConductFlow can only read files you hand it. Until you pick one here — or let it write you a starting pair — the Drive connection is granted and reads nothing at all, and every follow-up is drafted without your templates."
-            action={driveConnected
-              ? (missing.length === 0 ? pickButton : starterButton)
-              : undefined}
+            body="Documents and events still get written — from ConductFlow's own wording. Hand over a file here, or let it write you a starting pair, and yours is used instead."
+            action={missing.length === 0 && driveConnected ? pickButton : starterButton}
           />
         ) : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>

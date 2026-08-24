@@ -2,13 +2,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveTemplate, type TemplateRole, type ResolvedTemplate } from "@/lib/google/templates";
 import { fillTemplate, tokenMatchesIn, describeMissing } from "./tokens";
 import { moneyPassThroughFor } from "./values";
-import type { DocsWriteClient, CreatedDocument } from "@/lib/google/docs";
+import { starterFor } from "@/lib/google/starter-templates";
+import type { DocsWriteClient, DocsCreateClient, CreatedDocument } from "@/lib/google/docs";
 import type { CalendarWriteClient, CreatedEvent } from "@/lib/google/calendar-write";
 
 /**
  * Why a generation did not happen. Both are ordinary outcomes an owner can fix, not faults:
- * an org that has bound no proposal template has not agreed to ConductFlow inventing one,
- * and a conversation that never established a fee cannot produce a document quoting it.
+ * an org that has bound no template and cannot be given the built-in one has nothing to
+ * generate from, and a conversation that never established a fee cannot produce a document
+ * quoting it.
  */
 export type BlockedReason = "no_template" | "missing_tokens";
 
@@ -33,6 +35,13 @@ export interface ArtifactDeps {
   readTemplate(template: ResolvedTemplate): Promise<string>;
   docs: DocsWriteClient;
   calendar: CalendarWriteClient;
+  /**
+   * Writes a document from text rather than by copying a file. Only used when the org has
+   * bound no template and ConductFlow falls back to its own — see `builtInBody`. Optional
+   * so a caller that only wants the bound-template path does not have to supply one; when
+   * it is absent, an unbound role blocks exactly as it always did.
+   */
+  docsCreate?: DocsCreateClient;
 }
 
 export type TokenValues = Record<string, string | null | undefined>;
@@ -52,24 +61,30 @@ export async function generateDocument(
   deps: ArtifactDeps,
 ): Promise<DocumentResult> {
   const template = await resolveTemplate(db, orgId, args.role);
-  if (!template) {
-    return {
-      ok: false,
-      reason: "no_template",
-      detail: `No ${args.role} template is bound. Pick one in Settings and give it the ${args.role} role.`,
-    };
-  }
+  // The built-in body has no file to copy, so it needs a client that can write a new one.
+  // Without that, an unbound role blocks exactly as it did before.
+  if (!template && !deps.docsCreate) return unbound(args.role, deps);
 
-  const text = await deps.readTemplate(template);
-  const values = withMoneyPassThrough(text, args.values);
-  const filled = fillTemplate(text, values);
+  const source = await sourceFor(template, args.role, deps);
+  if (!source) return unbound(args.role, deps);
+
+  const values = withMoneyPassThrough(source.text, args.values);
+  const filled = fillTemplate(source.text, values);
   if (!filled.ok) {
     return {
       ok: false,
       reason: "missing_tokens",
-      detail: `"${template.name}" was not used: ${describeMissing(filled.missing)}.`,
+      detail: `"${source.name}" was not used: ${describeMissing(filled.missing)}.`,
       missing: filled.missing,
     };
+  }
+
+  // Nothing to copy when the text is ConductFlow's own, so the already-substituted document
+  // is written in one upload. Formatting is not lost in the way it would be for a real
+  // template — the built-in body is plain text to begin with.
+  if (!template) {
+    const document = await deps.docsCreate!.createTextDocument(args.title, filled.text);
+    return { ok: true, document };
   }
 
   // Substitution happens twice against the same template text, and that is not redundant.
@@ -78,12 +93,42 @@ export async function generateDocument(
   // works on literals so the document keeps the template's formatting instead of being
   // rewritten as flat text.
   const document = await deps.docs.copyTemplate(template.fileId, args.title);
-  await deps.docs.replaceTokens(document.id, tokenMatchesIn(text).map(({ literal, name }) => ({
-    literal,
-    value: String(values[name]).trim(),
-  })));
+  await deps.docs.replaceTokens(document.id, tokenMatchesIn(source.text)
+    .map(({ literal, name }) => ({ literal, value: String(values[name]).trim() })));
 
   return { ok: true, document };
+}
+
+/**
+ * The text a generation will fill, and what to call it in a message to an owner.
+ *
+ * A bound template wins. Failing that ConductFlow uses its own body for the role, which is
+ * the difference between an org that has been through the Google Picker and one that has
+ * not: binding a template is now a way to *change* what gets produced rather than the
+ * precondition for producing anything. An owner who wants their own wording still gets it;
+ * an owner who has not got that far gets a document instead of an explanation.
+ */
+async function sourceFor(
+  template: ResolvedTemplate | null,
+  role: TemplateRole,
+  deps: ArtifactDeps,
+): Promise<{ text: string; name: string } | null> {
+  if (template) {
+    return { text: await deps.readTemplate(template), name: template.name };
+  }
+  const starter = starterFor(role);
+  // Document roles need somewhere to put the result; an event does not, which is why the
+  // calendar path passes a `deps` whose `docsCreate` it never uses.
+  if (!starter) return null;
+  return { text: starter.body, name: `ConductFlow's built-in ${role} wording` };
+}
+
+function unbound(role: TemplateRole, deps: ArtifactDeps): GenerationBlocked {
+  const detail = deps.docsCreate
+    ? `ConductFlow has no built-in ${role} wording, so a template has to be bound. `
+      + `Add one in Settings and give it the ${role} role.`
+    : `No ${role} template is bound. Pick one in Settings and give it the ${role} role.`;
+  return { ok: false, reason: "no_template", detail };
 }
 
 /**
@@ -99,22 +144,20 @@ export async function generateCalendarEvent(
   args: { values: TokenValues; start: string; end: string; fallbackTitle: string },
   deps: ArtifactDeps,
 ): Promise<EventResult> {
+  // An event needs no Drive file at all when the wording is ConductFlow's own, which is the
+  // whole point: a calendar template used to be required for a calendar event, and an org
+  // that granted only calendar access could never produce one.
   const template = await resolveTemplate(db, orgId, "calendar");
-  if (!template) {
-    return {
-      ok: false,
-      reason: "no_template",
-      detail: "No calendar template is bound. Pick one in Settings and give it the calendar role.",
-    };
-  }
+  const source = await sourceFor(template, "calendar", deps);
+  if (!source) return unbound("calendar", deps);
 
-  const text = await deps.readTemplate(template);
+  const text = source.text;
   const filled = fillTemplate(text, withMoneyPassThrough(text, args.values));
   if (!filled.ok) {
     return {
       ok: false,
       reason: "missing_tokens",
-      detail: `"${template.name}" was not used: ${describeMissing(filled.missing)}.`,
+      detail: `"${source.name}" was not used: ${describeMissing(filled.missing)}.`,
       missing: filled.missing,
     };
   }

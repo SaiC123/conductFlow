@@ -22,8 +22,10 @@ export interface ArtifactCapabilities {
  * `calendarReady` and skips what it cannot do.
  *
  * Note document creation rides on `drive_templates` rather than a capability of its own:
- * `drive.file` covers both reading a picked template and copying it, and the copy is
- * app-created so the Docs API accepts the same token.
+ * `drive.file` covers reading a picked template, copying it, and writing a new file from
+ * scratch, and all three are app-created so the Docs API accepts the same token. That last
+ * one is what lets an org with no bound template still get a document — see `sourceFor` in
+ * ./generate.ts.
  */
 export async function artifactCapabilitiesFor(
   service: SupabaseClient, orgId: string,
@@ -34,6 +36,7 @@ export async function artifactCapabilitiesFor(
   ]);
 
   const drive = createDriveClient(driveToken ?? "");
+  const docs = createDocsWriteClient(driveToken ?? "");
 
   return {
     driveReady: driveToken !== null,
@@ -46,7 +49,10 @@ export async function artifactCapabilitiesFor(
         // readFile only branches on mimeType; modifiedTime is not consulted.
         modifiedTime: "",
       }),
-      docs: createDocsWriteClient(driveToken ?? ""),
+      docs,
+      // Same client, named separately so the generation path has to ask for the ability to
+      // write a *new* file rather than getting it as a side effect of being able to copy one.
+      docsCreate: docs,
       calendar: createCalendarWriteClient(calendarToken ?? ""),
     },
   };
