@@ -49,17 +49,15 @@ describe("runIngest escalations", () => {
     expect(await escalationsFor(r.conversationId)).toEqual([]);
   });
 
-  it("raises a complaint and links it to the conversation, not a commitment", async () => {
+  // What a transcript says is the owner's business. An unhappy or legal-sounding
+  // conversation is ingested like any other and raises nothing on wording alone.
+  it("raises nothing on complaint or legal wording", async () => {
     const r = await runIngest(db, {
       ...base,
-      transcript: "Client: I'm disappointed with last month. Consultant: I'll send the revised deck.",
+      transcript: "Client: I'm disappointed and my attorney will call. Consultant: I'll send the revised deck.",
     }, mockReturning({ commitments: [owned], subject: "Deck", body: "On its way." }));
 
-    const rows = await escalationsFor(r.conversationId);
-    const complaint = rows.find((e) => e.kind === "complaint");
-    expect(complaint).toBeDefined();
-    expect(complaint!.commitment_id).toBeNull();
-    expect(complaint!.state).toBe("open");
+    expect(await escalationsFor(r.conversationId)).toEqual([]);
   });
 
   it("links a missing-owner escalation to the commitment it is about", async () => {
@@ -82,8 +80,11 @@ describe("runIngest escalations", () => {
 
   it("writes an agent-actor audit row when it escalates", async () => {
     const r = await runIngest(db, {
-      ...base, transcript: "Client: My attorney will be in touch. I'll send the signed copy.",
-    }, mockReturning({ commitments: [owned], subject: "Deck", body: "On its way." }));
+      ...base, transcript: "Someone will send the signed copy.",
+    }, mockReturning({
+      commitments: [{ ...owned, owner: null, deadline: null }],
+      subject: "Deck", body: "On its way.",
+    }));
 
     const { data } = await db.from("audit_event").select("*")
       .eq("target", `conversation:${r.conversationId}:escalate`);
@@ -96,7 +97,7 @@ describe("runIngest escalations", () => {
       commitments: [{ ...owned, owner: null }], subject: "Deck", body: "On its way.",
     });
     const r = await runIngest(db, {
-      ...base, transcript: "Client: I'm frustrated. Someone will send the deck.",
+      ...base, transcript: "Someone will send the deck.",
     }, model);
     const first = await escalationsFor(r.conversationId);
 
@@ -150,13 +151,17 @@ describe("runIngest honors escalation_conditions", () => {
   // Declared first on purpose: Vitest runs `it` blocks in declaration order within a file,
   // so this one sees the defaults, before the restricted row below is written. Without it a
   // filter that silenced every kind would pass the negative case.
-  it("raises a complaint the default blueprint names", async () => {
+  it("raises a missing-owner escalation the default blueprint names", async () => {
     const r = await runIngest(db, {
-      ...base, title: "Unhappy call — defaults",
-      transcript: "Client: I am frustrated with the delay. Consultant: I'll send the revised deck.",
-    }, mockReturning({ commitments: [owned], subject: "Deck", body: "On its way." }));
+      ...base, title: "Ownerless promise — defaults",
+      transcript: "Someone will send the deck at some point.",
+    }, mockReturning({
+      commitments: [{ ...owned, owner: null, deadline: null }],
+      subject: "Deck", body: "On its way.",
+    }));
 
-    expect((await escalationsFor(r.conversationId)).map((e) => e.kind)).toContain("complaint");
+    expect((await escalationsFor(r.conversationId)).map((e) => e.kind))
+      .toContain("missing_owner_or_deadline");
   });
 
   it("does not raise an escalation kind the blueprint omits", async () => {
@@ -165,21 +170,11 @@ describe("runIngest honors escalation_conditions", () => {
     // org A while this row is live.
     const { error } = await db.from("agent_blueprint").insert({
       ...DEFAULT_ROW, org_id: orgA, version: await nextVersion(9501),
-      // complaint deliberately absent
-      escalation_conditions: ["legal_concern", "missing_owner_or_deadline"],
+      // missing_owner_or_deadline deliberately absent
+      escalation_conditions: ["complaint", "legal_concern"],
     });
     if (error) throw error;
 
-    const r = await runIngest(db, {
-      ...base, title: "Unhappy call — restricted",
-      transcript: "Client: I am frustrated with the delay. Consultant: I'll send the revised deck.",
-    }, mockReturning({ commitments: [owned], subject: "Deck", body: "On its way." }));
-
-    expect((await escalationsFor(r.conversationId)).map((e) => e.kind))
-      .not.toContain("complaint");
-  });
-
-  it("still raises a kind the restricted blueprint keeps", async () => {
     const r = await runIngest(db, {
       ...base, title: "Ownerless promise — restricted",
       transcript: "Someone will send the deck at some point.",
@@ -189,6 +184,6 @@ describe("runIngest honors escalation_conditions", () => {
     }));
 
     expect((await escalationsFor(r.conversationId)).map((e) => e.kind))
-      .toContain("missing_owner_or_deadline");
+      .not.toContain("missing_owner_or_deadline");
   });
 });

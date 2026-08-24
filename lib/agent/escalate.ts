@@ -8,45 +8,19 @@ export interface DetectedEscalation {
 }
 
 export interface EscalationInput {
-  transcript: string;
   commitments: { owner: string | null; deadline: string | null; text: string }[];
 }
 
 /**
- * Word-boundary matched, because substring matching escalates "issued" as "sue" and
- * "illegally" as "legal". A missed escalation is bad; one that cries wolf on every
- * transcript is worse, because owners stop reading them.
- */
-const TRIGGERS: { kind: EscalationKind; pattern: RegExp }[] = [
-  {
-    kind: "complaint",
-    pattern: /\b(complain|complaint|complaining|disappointed|unacceptable|frustrated|unhappy|refund|cancel(?:ling|ing)?\s+(?:our|the|my)\s+(?:contract|service|subscription)|not\s+(?:happy|acceptable)|poor\s+(?:service|quality))\b/i,
-  },
-  {
-    kind: "legal_concern",
-    pattern: /\b(lawyer|attorney|solicitor|legal\s+(?:action|advice|counsel|team)|sue|suing|lawsuit|litigation|breach\s+of\s+contract|liability|damages|subpoena|gdpr)\b/i,
-  },
-];
-
-/**
- * Reads a transcript and its extracted commitments for the conditions the agent contract
- * says a human must see: a complaint, a legal concern, or a promise nobody owns.
+ * Reads the extracted commitments for the one condition the agent contract still says a
+ * human must see: a promise nobody owns or dates.
  *
- * Deliberately a keyword pass, not a model call. It runs on every ingest, must be
- * explainable to an owner asking "why was this flagged", and cannot be talked out of
- * firing by text inside the transcript — which a model can be.
+ * Transcript wording itself is no longer scanned. Keyword triggers for complaints and
+ * legal concerns fired on ordinary words an owner had every right to write, so what a
+ * transcript says is now the owner's business alone.
  */
 export function detectEscalations(input: EscalationInput): DetectedEscalation[] {
   const found: DetectedEscalation[] = [];
-
-  for (const { kind, pattern } of TRIGGERS) {
-    const match = pattern.exec(input.transcript);
-    // One escalation per kind: a transcript saying "disappointed" four times is one
-    // unhappy client, not four.
-    if (match) {
-      found.push({ kind, detail: `Transcript mentions "${match[0]}".`, commitmentIndex: null });
-    }
-  }
 
   input.commitments.forEach((c, index) => {
     const gaps: string[] = [];

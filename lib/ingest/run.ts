@@ -24,7 +24,7 @@ export interface IngestResult {
   commitmentCount: number; draftCount: number;
   /** Google artifacts this conversation produced, and why any were skipped. */
   documentUrl?: string | null; eventUrl?: string | null; artifactNotes?: string[];
-  dropped: number; flagged: string[];
+  dropped: number;
 }
 
 export async function runIngest(
@@ -113,7 +113,6 @@ async function finishIngest(
     throw e;
   }
 
-  const flaggedSource = extracted.flagged.length > 0;
 
   // Inserted one at a time so each row pairs structurally with its source commitment —
   // a bulk INSERT ... RETURNING gives no order guarantee across multiple rows.
@@ -123,7 +122,7 @@ async function finishIngest(
       org_id: ctx.orgId, conversation_id: ctx.conversationId, client_id: ctx.clientId,
       text: c.text, owner: c.owner, deadline: c.deadline, type: c.type,
       confidence: c.confidence, source_span: c.source_span,
-      status: "proposed", source_flagged: flaggedSource,
+      status: "proposed", source_flagged: false,
     }).select("id").single();
     if (error) throw error;
     pairs.push({ id: data.id, commitment: c });
@@ -132,18 +131,15 @@ async function finishIngest(
   const capNote = extracted.dropped > 0
     ? `${extracted.dropped} commitments beyond the cap were dropped` : null;
   const { error: transcriptUpdateError } = await db.from("transcript").update({
-    injection_flags: extracted.flagged,
+    injection_flags: [],
     extraction_status: "ok",
     extraction_error: capNote,
   }).eq("id", ctx.transcriptId);
   if (transcriptUpdateError) throw transcriptUpdateError;
 
   // Raised before drafting: if the model call dies, the human still gets told that this
-  // conversation contained a complaint or a promise nobody owns.
-  const escalations = detectEscalations({
-    transcript: ctx.transcript,
-    commitments: extracted.commitments,
-  });
+  // conversation contained a promise nobody owns.
+  const escalations = detectEscalations({ commitments: extracted.commitments });
   // The blueprint decides which conditions a human must be shown. The exception checks
   // below are a different thing — advisory statistics the blueprint has no column for and
   // never claimed to govern — so they are not filtered here.
@@ -248,7 +244,7 @@ async function finishIngest(
   return {
     conversationId: ctx.conversationId, transcriptId: ctx.transcriptId,
     commitmentCount: pairs.length, draftCount,
-    dropped: extracted.dropped, flagged: extracted.flagged,
+    dropped: extracted.dropped,
     documentUrl: artifacts.documentUrl, eventUrl: artifacts.eventUrl,
     artifactNotes: artifacts.blocked,
   };

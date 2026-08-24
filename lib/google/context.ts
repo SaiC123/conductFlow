@@ -1,4 +1,4 @@
-import { sanitizeIngested, wrapAsData } from "@/lib/agent/injection";
+import { wrapAsData } from "@/lib/agent/injection";
 import type { CalendarClient, CalendarEvent } from "./calendar";
 import type { DriveClient, DriveFile } from "./drive";
 
@@ -51,12 +51,10 @@ async function loadTemplate(
   const trimmed = truncateOnParagraph(raw).trim();
   if (trimmed.length === 0) return null;
 
-  const { text, flagged } = sanitizeIngested(trimmed);
-  recordFlags(sources, flagged);
   // `template` is the source name the agent contract already allows, so it is recorded
   // verbatim — a decorated string would fail a naive allowedSources check.
   sources.push("template");
-  return wrapAsData(text);
+  return wrapAsData(trimmed);
 }
 
 async function loadMeetingContext(
@@ -72,10 +70,8 @@ async function loadMeetingContext(
   const summary = summarizeEvents(events);
   if (!summary) return null;
 
-  const { text, flagged } = sanitizeIngested(summary);
-  recordFlags(sources, flagged);
   sources.push("calendar_event");
-  return wrapAsData(text);
+  return wrapAsData(summary);
 }
 
 /**
@@ -126,13 +122,6 @@ function summarizeEvents(events: CalendarEvent[]): string | null {
     return `- ${title} at ${clock} (${attendees})`;
   });
   return lines.length > 0 ? lines.join("\n") : null;
-}
-
-function recordFlags(sources: string[], flagged: string[]) {
-  for (const pattern of flagged) {
-    const entry = `flagged:${pattern}`;
-    if (!sources.includes(entry)) sources.push(entry);
-  }
 }
 
 /** Events overlapping the conversation date, in UTC. */

@@ -6,7 +6,6 @@ import { extractCommitments } from "@/lib/agent/extract";
 interface Fixture {
   name: string; conversationDate: string; clientName: string; transcript: string;
   expected: { minCommitments: number; maxCommitments: number; withDeadline: number; withOwner: number };
-  mustFlag?: boolean;
 }
 
 const dir = join(import.meta.dirname, "transcripts");
@@ -44,9 +43,8 @@ describe("extraction eval", () => {
       const verbatim = r.commitments.filter((c) => c.span_verified).length;
       const countOk = r.commitments.length >= f.expected.minCommitments
         && r.commitments.length <= f.expected.maxCommitments;
-      const flagOk = !f.mustFlag || r.flagged.length > 0;
       const spanOk = verbatim === r.commitments.length;
-      const pass = countOk && flagOk && spanOk
+      const pass = countOk && spanOk
         && withDeadline >= f.expected.withDeadline && withOwner >= f.expected.withOwner;
 
       rows.push({
@@ -55,13 +53,11 @@ describe("extraction eval", () => {
         deadline: `${withDeadline}/${f.expected.withDeadline}`,
         owner: `${withOwner}/${f.expected.withOwner}`,
         verbatim: `${verbatim}/${r.commitments.length}`,
-        flagged: String(r.flagged.length),
         result: pass ? "PASS" : "FAIL",
       });
 
       expect(countOk, `${f.name}: commitment count ${r.commitments.length} outside [${f.expected.minCommitments}, ${f.expected.maxCommitments}]`).toBe(true);
       expect(spanOk, `${f.name}: ${r.commitments.length - verbatim} commitment(s) failed span verification`).toBe(true);
-      expect(flagOk, `${f.name}: expected an injection flag but none was raised`).toBe(true);
       expect(withDeadline, `${f.name}: deadline coverage below expected`).toBeGreaterThanOrEqual(f.expected.withDeadline);
       expect(withOwner, `${f.name}: owner coverage below expected`).toBeGreaterThanOrEqual(f.expected.withOwner);
     });

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Commitment } from "@/lib/types";
 import { Badge, EmptyState, StatusPill, buttonStyle } from "@/components/ui/primitives";
 
-type Risk = "overdue" | "flagged" | "unowned" | "uncertain" | "none";
+type Risk = "overdue" | "unowned" | "uncertain" | "none";
 
 /**
  * One risk per row, in the order an owner should care about it. A row can be several of
@@ -11,7 +11,6 @@ type Risk = "overdue" | "flagged" | "unowned" | "uncertain" | "none";
  */
 function riskOf(c: Commitment): Risk {
   if (c.deadline && new Date(c.deadline) < new Date() && c.status !== "done") return "overdue";
-  if (c.source_flagged) return "flagged";
   if (!c.owner) return "unowned";
   if (c.confidence === "low") return "uncertain";
   return "none";
@@ -19,7 +18,6 @@ function riskOf(c: Commitment): Risk {
 
 const RAIL: Record<Risk, string> = {
   overdue: "var(--danger)",
-  flagged: "var(--warn)",
   unowned: "var(--warn)",
   uncertain: "var(--warn)",
   none: "transparent",
@@ -77,11 +75,6 @@ export function CommitmentList({ items }: { items: Commitment[] }) {
 
                 <span style={{ display: "flex", alignItems: "center", gap: "var(--space-3)",
                   flexShrink: 0 }}>
-                  {c.source_flagged && (
-                    <Badge tone="warn" title="This transcript contained instruction-like text">
-                      flagged source
-                    </Badge>
-                  )}
                   {/* "high" on every row is noise; only uncertainty earns a badge. */}
                   {c.confidence !== "high" && (
                     <Badge tone={c.confidence === "low" ? "warn" : "neutral"}

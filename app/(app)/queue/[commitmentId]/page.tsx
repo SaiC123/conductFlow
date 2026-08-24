@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { getCommitment, getDraftForCommitment, getTranscriptForCommitment } from "@/lib/db/queries";
+import { getCommitment, getDraftForCommitment } from "@/lib/db/queries";
 import { DraftSurface } from "@/components/draft/DraftSurface";
 import { ApprovalBar } from "@/components/draft/ApprovalBar";
 import { GenerateDraftButton } from "@/components/draft/GenerateDraftButton";
 import {
-  BackLink, Card, CardTitle, EmptyState, SectionHeading, buttonStyle, pageStyle,
+  BackLink, EmptyState, SectionHeading, buttonStyle, pageStyle,
 } from "@/components/ui/primitives";
 
 /** Label above value, value in mono — the panel reads like an instrument, not a sentence. */
@@ -27,10 +27,9 @@ function Fact({ label, value, tone }:
 
 export default async function DraftReview({ params }: { params: Promise<{ commitmentId: string }> }) {
   const { commitmentId } = await params;
-  const [c, draft, transcript] = await Promise.all([
+  const [c, draft] = await Promise.all([
     getCommitment(commitmentId),
     getDraftForCommitment(commitmentId),
-    getTranscriptForCommitment(commitmentId),
   ]);
 
   if (!c) return (
@@ -45,7 +44,6 @@ export default async function DraftReview({ params }: { params: Promise<{ commit
   );
 
   const overdue = !!c.deadline && new Date(c.deadline) < new Date() && c.status !== "done";
-  const flagged = transcript && transcript.injection_flags.length > 0;
 
   return (
     <main style={pageStyle}>
@@ -65,22 +63,6 @@ export default async function DraftReview({ params }: { params: Promise<{ commit
         alignItems: "flex-start", marginTop: "var(--space-5)" }}>
 
         <div style={{ flex: "1 1 440px", minWidth: 0 }}>
-          {flagged && (
-            <Card tone="warn" style={{ marginBottom: "var(--space-4)" }}>
-              <CardTitle tone="warn" dot>Flagged source</CardTitle>
-              <p style={{ color: "var(--muted)", marginTop: "var(--space-2)",
-                maxWidth: "68ch", lineHeight: 1.55 }}>
-                This transcript contained text that reads like instructions to the assistant. It was
-                treated as data and never followed — but read this commitment carefully before
-                approving.
-              </p>
-              <p className="mono" style={{ color: "var(--faint)", fontSize: "var(--text-xs)",
-                marginTop: "var(--space-3)" }}>
-                matched: {transcript.injection_flags.join(" · ")}
-              </p>
-            </Card>
-          )}
-
           <DraftSurface draft={draft} provenance={["transcript", "client record"]} />
           <GenerateDraftButton commitmentId={c.id} hasDraft={!!draft} />
           <ApprovalBar commitmentId={c.id} />

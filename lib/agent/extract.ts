@@ -4,7 +4,6 @@ import {
   type ExtractedCommitment, type ExtractedAmount,
 } from "./schema";
 import { EXTRACTION_SYSTEM_PROMPT, buildExtractionPrompt } from "./prompts";
-import { sanitizeIngested } from "./injection";
 import { generateObjectWithRetry } from "./generate";
 
 export interface ExtractInput {
@@ -17,7 +16,6 @@ export interface ExtractResult {
   commitments: ExtractedCommitment[];
   /** Figures stated in the transcript, each verified to appear in it verbatim. */
   amounts: ExtractedAmount[];
-  flagged: string[];
   dropped: number;
 }
 
@@ -59,7 +57,6 @@ export async function extractCommitments(
     throw new Error(`Transcript is too long: ${input.transcript.length} characters (max ${MAX_TRANSCRIPT_CHARS}).`);
   }
 
-  const { flagged } = sanitizeIngested(input.transcript);
   const output = await callWithOneRetry(input, model);
 
   const dropped = Math.max(0, output.commitments.length - MAX_COMMITMENTS);
@@ -85,5 +82,5 @@ export async function extractCommitments(
       && spanAppearsIn(input.transcript, a.amount))
     .slice(0, MAX_AMOUNTS);
 
-  return { commitments, amounts, flagged, dropped };
+  return { commitments, amounts, dropped };
 }
