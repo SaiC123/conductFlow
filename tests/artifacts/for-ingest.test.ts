@@ -1,15 +1,39 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
+import { SignJWT } from "jose";
 import { blueprintToContract, DEFAULT_BLUEPRINT } from "@/lib/agent/blueprint";
 import { generateArtifactsForConversation } from "@/lib/artifacts/for-ingest";
 import type { ArtifactCapabilities } from "@/lib/artifacts/deps";
 
 const URL = process.env.SUPABASE_URL!;
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const ANON = process.env.SUPABASE_ANON_KEY!;
+const JWT_SECRET = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET!);
 
 let db: SupabaseClient;
 beforeAll(() => { db = createClient(URL, SERVICE, { auth: { persistSession: false } }); });
+
+/**
+ * A client for a signed-in member of `orgId` — the role the ingest path actually runs as
+ * in production, where the Server Action hands `runIngest` the cookie-scoped client from
+ * getServerClient(). Every other test here injects a service-role client, which bypasses
+ * RLS; only this one sees what a browser-driven ingest sees.
+ */
+async function memberClient(orgId: string): Promise<SupabaseClient> {
+  const userId = randomUUID();
+  const { error: u } = await db.from("app_user")
+    .insert({ id: userId, email: `${userId}@example.test` });
+  if (u) throw u;
+  const { error: m } = await db.from("membership")
+    .insert({ user_id: userId, org_id: orgId, role: "owner" });
+  if (m) throw m;
+
+  const token = await new SignJWT({ sub: userId, role: "authenticated" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt().setExpirationTime("1h").sign(JWT_SECRET);
+  return createClient(URL, ANON, { global: { headers: { Authorization: `Bearer ${token}` } } });
+}
 
 const COMMITMENTS = [{
   text: "Send the revised scope", owner: "Consultant", deadline: "2026-09-01",
@@ -211,6 +235,21 @@ describe("generateArtifactsForConversation", () => {
     expect(r.documentUrl).toBeNull();
     expect(r.blocked.join(" ")).toMatch(/403/);
     expect((await artifactRows(orgId))[0].outcome).toBe("failed");
+  });
+
+  // Regression: the ingest path hands this function the cookie-scoped `authenticated`
+  // client, not a service-role one, and `generated_artifact` grants insert to service_role
+  // alone. Every other test here injects a service-role client, which bypasses RLS and so
+  // could never catch that the audit rows were being silently dropped in production.
+  it("records artifacts even when the caller's client cannot write the table", async () => {
+    const { orgId, conversationId } = await scenario(["proposal", "calendar"]);
+    const { caps } = capabilities("For {{client_name}} on {{conversation_date}}");
+
+    const asMember = await memberClient(orgId);
+    const r = await generateArtifactsForConversation(asMember, args(orgId, conversationId), caps);
+
+    expect(r.documentUrl).toContain("doc-1");
+    expect(await artifactRows(orgId)).toHaveLength(2);
   });
 
   it("puts the event on the soonest deadline the conversation carried", async () => {

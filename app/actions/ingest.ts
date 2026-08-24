@@ -6,6 +6,7 @@ import { getCurrentOrgId } from "@/lib/db/queries";
 import { parseTranscriptFile } from "@/lib/parse/transcript";
 import { runIngest, retryExtractionFor } from "@/lib/ingest/run";
 import { guardLlmBudget } from "@/lib/limits/rate-limit";
+import { UpstreamRateLimited } from "@/lib/agent/upstream-limit";
 
 export async function ingestTranscript(formData: FormData) {
   const orgId = await getCurrentOrgId();
@@ -46,7 +47,16 @@ export async function ingestTranscript(formData: FormData) {
     clientName = data?.name ?? "client";
   }
 
-  await runIngest(db, { orgId, clientId, clientName, title, occurredAt, transcript: text });
+  // Returned, not thrown, for the reason guardLlmBudget documents: Next redacts the message
+  // of anything thrown out of a Server Action in production, and "the model is busy, try
+  // again in a minute" is useless as "an error occurred". Kept outside the redirect below,
+  // which throws by design and must not be caught.
+  try {
+    await runIngest(db, { orgId, clientId, clientName, title, occurredAt, transcript: text });
+  } catch (e) {
+    if (e instanceof UpstreamRateLimited) return { error: e.message };
+    throw e;
+  }
   revalidatePath("/queue");
   redirect("/queue");
 }
@@ -58,6 +68,11 @@ export async function retryExtraction(transcriptId: string) {
   const refused = await guardLlmBudget(db, orgId, "retry_extraction");
   if (refused) return refused;
 
-  await retryExtractionFor(db, transcriptId);
+  try {
+    await retryExtractionFor(db, transcriptId);
+  } catch (e) {
+    if (e instanceof UpstreamRateLimited) return { error: e.message };
+    throw e;
+  }
   revalidatePath("/queue");
 }

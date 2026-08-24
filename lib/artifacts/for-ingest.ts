@@ -5,6 +5,7 @@ import type { ExtractedCommitment, ExtractedAmount } from "@/lib/agent/schema";
 import { buildTokenValues } from "./values";
 import { generateDocument, generateCalendarEvent } from "./generate";
 import { artifactCapabilitiesFor, type ArtifactCapabilities } from "./deps";
+import { getServiceClient } from "@/lib/db/service";
 
 /** Meetings default to half an hour; nothing in a transcript says how long one should be. */
 const EVENT_MINUTES = 30;
@@ -75,17 +76,17 @@ export async function generateArtifactsForConversation(
 
       if (doc.ok) {
         result.documentUrl = doc.document.url;
-        await record(db, args, "document", "created", {
+        await record(args, "document", "created", {
           externalId: doc.document.id, url: doc.document.url, title: doc.document.name,
         });
       } else {
         result.blocked.push(doc.detail);
-        await record(db, args, "document", doc.reason, { detail: doc.detail });
+        await record(args, "document", doc.reason, { detail: doc.detail });
       }
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       result.blocked.push(`The document could not be created: ${detail}`);
-      await record(db, args, "document", "failed", { detail });
+      await record(args, "document", "failed", { detail });
     }
   }
 
@@ -105,17 +106,17 @@ export async function generateArtifactsForConversation(
 
       if (event.ok) {
         result.eventUrl = event.event.url;
-        await record(db, args, "calendar_event", "created", {
+        await record(args, "calendar_event", "created", {
           externalId: event.event.id, url: event.event.url,
         });
       } else {
         result.blocked.push(event.detail);
-        await record(db, args, "calendar_event", event.reason, { detail: event.detail });
+        await record(args, "calendar_event", event.reason, { detail: event.detail });
       }
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       result.blocked.push(`The calendar event could not be created: ${detail}`);
-      await record(db, args, "calendar_event", "failed", { detail });
+      await record(args, "calendar_event", "failed", { detail });
     }
   }
 
@@ -123,14 +124,18 @@ export async function generateArtifactsForConversation(
 }
 
 async function record(
-  db: SupabaseClient,
   args: ArtifactRunArgs,
   kind: "document" | "calendar_event",
   outcome: "created" | "no_template" | "missing_tokens" | "failed",
   extra: { externalId?: string; url?: string; title?: string; detail?: string },
 ): Promise<void> {
-  // A failure to write the record must not turn a created document into a thrown ingest.
-  const { error } = await db.from("generated_artifact").insert({
+  // Written with the service client, not the caller's. `generated_artifact` grants insert
+  // to service_role alone — these rows are the record that the agent, not a person, created
+  // something in Google, and a browser able to write them could claim a document ConductFlow
+  // never made. The ingest path runs as the signed-in owner, so passing its client through
+  // here meant every insert was refused by RLS and swallowed by the log line below.
+  // Same shape as logAudit, for the same reason.
+  const { error } = await getServiceClient().from("generated_artifact").insert({
     org_id: args.orgId,
     conversation_id: args.conversationId,
     kind,

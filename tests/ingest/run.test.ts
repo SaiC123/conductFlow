@@ -40,6 +40,33 @@ const args = {
   title: "Weekly check-in", occurredAt: "2026-08-11", transcript: TRANSCRIPT,
 };
 
+/**
+ * Answers every call, and records how many were in flight at once. Drafting runs one call
+ * per commitment, so a conversation carrying several promises is exactly where a burst
+ * against a rate-limited provider comes from.
+ */
+function concurrencyProbe(payload: unknown) {
+  let inFlight = 0, peak = 0;
+  const model = new MockLanguageModelV4({
+    doGenerate: async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: {
+          inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 20, text: 20, reasoning: undefined },
+        },
+        warnings: [],
+      };
+    },
+  });
+  return { model, peak: () => peak };
+}
+
 // Extraction calls see "Transcript:" in the prompt, draft calls see "Commitment: <text>".
 // Echoing that text back into the draft subject proves each draft call was built from
 // the right commitment, not just paired up by array position after the fact.
@@ -184,5 +211,27 @@ describe("runIngest", () => {
       expect(draft).toBeDefined();
       expect(draft!.subject).toBe(c.text);
     }
+  });
+});
+
+// A burst is what exhausts a rate-limited provider: one ingest firing a draft call per
+// commitment concurrently turns a five-promise conversation into five simultaneous
+// requests, and the provider refuses most of them. Drafts are worth waiting for.
+describe("runIngest draft pacing", () => {
+  it("writes drafts one at a time rather than all at once", async () => {
+    const { model, peak } = concurrencyProbe({
+      commitments: Array.from({ length: 5 }, (_, i) => ({
+        text: `Send deliverable ${i}`, owner: "Tutor", deadline: "2026-08-14",
+        type: "deliverable", confidence: "high", source_span: `Send deliverable ${i}`,
+      })),
+      subject: "Confirming", body: "On its way.",
+    });
+
+    const r = await runIngest(db, {
+      ...args, title: "Five promises", transcript: "Tutor: several things.",
+    }, model);
+
+    expect(r.commitmentCount).toBe(5);
+    expect(peak()).toBe(1);
   });
 });

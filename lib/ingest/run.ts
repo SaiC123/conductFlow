@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit/log";
 import { contextForOrg } from "@/lib/google/draft-context";
 import { generateArtifactsForConversation } from "@/lib/artifacts/for-ingest";
 import { detectEscalations } from "@/lib/agent/escalate";
+import { UpstreamRateLimited } from "@/lib/agent/upstream-limit";
 import { detectExceptions } from "@/lib/ops/exceptions";
 import { buildOperationsMap } from "@/lib/ops/map";
 import { logFailure } from "@/lib/observability/log";
@@ -208,23 +209,33 @@ async function finishIngest(
     orgId: ctx.orgId, clientName: ctx.clientName, occurredAt: ctx.occurredAt,
   });
 
+  // One at a time, not Promise.allSettled. A conversation carrying five promises used to
+  // fire five model calls at once, which is precisely the burst a rate-limited provider
+  // refuses — and it refused most of them, so an ingest that found every promise still
+  // produced no drafts. Sequential is slower and finishes.
+  //
   // A draft failing is not an ingest failing — that commitment keeps the empty-draft state.
-  const drafts = await Promise.allSettled(pairs.map(async ({ id, commitment: c }) => {
-    const draft = await generateFollowUpDraft({
-      templateText: context.templateText, meetingContext: context.meetingContext,
-      commitmentText: c.text, clientName: ctx.clientName,
-      deadline: c.deadline, sourceSpan: c.source_span,
-    }, model);
-    const { error } = await db.from("deliverable_draft").insert({
-      org_id: ctx.orgId, commitment_id: id, kind: "email",
-      subject: draft.subject, body: draft.body,
-    });
-    if (error) throw error;
-  }));
-  for (const d of drafts) {
-    if (d.status === "rejected") logFailure("finishIngest.draft", d.reason);
+  let draftCount = 0;
+  for (const { id, commitment: c } of pairs) {
+    try {
+      const draft = await generateFollowUpDraft({
+        templateText: context.templateText, meetingContext: context.meetingContext,
+        commitmentText: c.text, clientName: ctx.clientName,
+        deadline: c.deadline, sourceSpan: c.source_span,
+      }, model);
+      const { error } = await db.from("deliverable_draft").insert({
+        org_id: ctx.orgId, commitment_id: id, kind: "email",
+        subject: draft.subject, body: draft.body,
+      });
+      if (error) throw error;
+      draftCount += 1;
+    } catch (e) {
+      logFailure("finishIngest.draft", e);
+      // The provider is refusing everyone, not just this promise. Twenty more calls will
+      // not fare better and the owner is waiting, so stop and let them retry.
+      if (e instanceof UpstreamRateLimited) break;
+    }
   }
-  const draftCount = drafts.filter((d) => d.status === "fulfilled").length;
 
   // Google artifacts. Deliberately after the drafts and outside their Promise.allSettled:
   // a document or an event is a consequence of the whole conversation, not of one promise,
