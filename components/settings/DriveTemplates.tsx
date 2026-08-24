@@ -8,6 +8,7 @@ import {
   DRIVE_FILE_SCOPE, TEMPLATE_MIME_TYPES, mapPickedDocuments, isSelectableAsTemplate,
 } from "@/lib/google/picker";
 import { Card, CardTitle, Badge, EmptyState, buttonStyle } from "@/components/ui/primitives";
+import { failed } from "@/lib/actions/result";
 import { TEMPLATE_ROLES } from "@/lib/google/templates";
 
 export interface DriveTemplateRow {
@@ -157,6 +158,7 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
       if (files.length === 0) return;
 
       const result = await recordPickedTemplates(files);
+      if (failed(result)) return setError(result.error);
       setNotice(`${result.recorded} file${result.recorded === 1 ? "" : "s"} handed over.`);
       if (result.verified && result.unreadable.length > 0) {
         setWarning(`ConductFlow still cannot read ${result.unreadable.join(", ")}. That`
@@ -180,7 +182,9 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
   async function startFromScratch() {
     setError(null); setNotice(null); setWarning(null); setStarting(true);
     try {
-      const { created, alreadyBound } = await createStarterTemplates();
+      const result = await createStarterTemplates();
+      if (failed(result)) return setError(result.error);
+      const { created, alreadyBound } = result;
       if (created.length === 0) {
         setNotice(`Already covered — ${alreadyBound.join(" and ")} both have a template.`);
       } else {
@@ -199,7 +203,8 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
   async function forget(id: string) {
     setError(null); setNotice(null); setWarning(null); setBusyId(id);
     try {
-      await forgetDriveTemplate(id);
+      const result = await forgetDriveTemplate(id);
+      if (failed(result)) setError(result.error);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "That did not work.");
@@ -215,7 +220,8 @@ export function DriveTemplates({ templates, accountEmail, driveConnected,
   async function assignRole(id: string, role: string) {
     setError(null); setNotice(null); setWarning(null); setBusyId(id);
     try {
-      await setTemplateRole(id, role === "" ? null : role);
+      const result = await setTemplateRole(id, role === "" ? null : role);
+      if (failed(result)) setError(result.error);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "That did not work.");

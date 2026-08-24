@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { dismissReminder, runSweep } from "@/app/actions/tasks";
 import type { OpenReminder } from "@/lib/db/queries";
 import { Card, CardTitle, Badge, buttonStyle } from "@/components/ui/primitives";
+import { failed } from "@/lib/actions/result";
 
 const VISIBLE_LIMIT = 5;
 
@@ -33,7 +34,10 @@ export function ReminderStrip({ items, nowIso }: { items: OpenReminder[]; nowIso
     startTransition(async () => {
       try {
         const result = await fn();
-        if (describe) setNote(describe(result));
+        // Checked before `describe`, which would otherwise read `raised` off a failure
+        // object and announce "undefined overdue promises flagged".
+        if (failed(result)) setError(result.error);
+        else if (describe) setNote(describe(result));
         router.refresh();
       } catch (e) { setError(e instanceof Error ? e.message : "That did not work."); }
       finally { setClearing(null); }

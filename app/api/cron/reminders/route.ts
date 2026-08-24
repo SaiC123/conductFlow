@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/db/service";
 import { sweepReminders } from "@/lib/reminders/sweep";
+import { logFailure } from "@/lib/observability/log";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,18 @@ export async function GET(request: Request) {
 
   // Service role: the scheduled sweep is the one job that legitimately spans orgs. It
   // touches `reminder` only — never a transcript, draft, or client record.
-  const result = await sweepReminders(getServiceClient(), { actor: "agent" });
-  return NextResponse.json(result);
+  //
+  // Wrapped because nobody is watching this one run. An uncaught throw here is a bare 500
+  // with no body, so the Vercel Cron log records that the sweep failed and nothing about
+  // why — and a sweep that stops raising reminders is silent by nature.
+  try {
+    const result = await sweepReminders(getServiceClient(), { actor: "agent" });
+    return NextResponse.json(result);
+  } catch (e) {
+    logFailure("cron.reminders", e);
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "the reminder sweep failed" },
+      { status: 500 },
+    );
+  }
 }

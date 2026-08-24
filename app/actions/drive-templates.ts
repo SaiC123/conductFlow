@@ -10,6 +10,7 @@ import { createDocsWriteClient, GOOGLE_DOC_MIME } from "@/lib/google/docs";
 import { DRIVE_FILE_SCOPE, parsePickedFiles, type PickedFile } from "@/lib/google/picker";
 import { isTemplateRole, boundRoles } from "@/lib/google/templates";
 import { STARTER_TEMPLATES } from "@/lib/google/starter-templates";
+import { reportable, type ActionFailed } from "@/lib/actions/result";
 
 export interface RecordedPick {
   recorded: number;
@@ -29,7 +30,13 @@ export interface RecordedPick {
  * becomes readable by the server's own token for the same client id and account. This
  * action records the result; it is not what creates the access.
  */
-export async function recordPickedTemplates(payload: unknown): Promise<RecordedPick> {
+export async function recordPickedTemplates(
+  payload: unknown,
+): Promise<RecordedPick | ActionFailed> {
+  return reportable("recordPickedTemplates", () => record(payload));
+}
+
+async function record(payload: unknown): Promise<RecordedPick> {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to hand over a template file.");
 
@@ -102,7 +109,14 @@ export interface StarterResult {
  * Deliberately additive. A role an org has already bound is left exactly as it is, so this
  * can be pressed twice without quietly replacing somebody's own template.
  */
-export async function createStarterTemplates(): Promise<StarterResult> {
+export async function createStarterTemplates(): Promise<StarterResult | ActionFailed> {
+  // "Connect Google Drive first — ConductFlow needs somewhere to put the templates" is a
+  // repair instruction, and it was the single most useful sentence in this file being
+  // replaced by a digest.
+  return reportable("createStarterTemplates", writeStarters);
+}
+
+async function writeStarters(): Promise<StarterResult> {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to create starter templates.");
 
@@ -176,6 +190,10 @@ export async function createStarterTemplates(): Promise<StarterResult> {
  * a role reads as moving it rather than as an error an owner has to interpret.
  */
 export async function setTemplateRole(templateId: string, role: string | null) {
+  return reportable("setTemplateRole", () => bindRole(templateId, role));
+}
+
+async function bindRole(templateId: string, role: string | null) {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to edit your template files.");
   if (role !== null && !isTemplateRole(role)) throw new Error(`Unknown template role "${role}".`);
@@ -210,6 +228,10 @@ export async function setTemplateRole(templateId: string, role: string | null) {
  * AI at is audit history — see the note in migration 0012.
  */
 export async function forgetDriveTemplate(templateId: string) {
+  return reportable("forgetDriveTemplate", () => forget(templateId));
+}
+
+async function forget(templateId: string) {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to edit your template files.");
 

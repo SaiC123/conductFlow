@@ -7,8 +7,12 @@ import { useEffect } from "react";
  * itself, and an import that is what failed cannot be part of the page that reports it.
  * Styles are inlined and minimal for the same reason — globals.css may never have loaded.
  */
-export default function GlobalError({ error, reset }: { error: Error; reset: () => void }) {
-  useEffect(() => { console.error(`[conductflow] global: ${error.message}`); }, [error]);
+export default function GlobalError(
+  { error, reset }: { error: Error & { digest?: string }; reset: () => void },
+) {
+  useEffect(() => {
+    console.error(`[conductflow] global: ${error.message}`, error.digest ?? "", error);
+  }, [error]);
   return (
     <html lang="en">
       <body style={{ margin: 0, fontFamily: "system-ui, sans-serif" }}>
@@ -17,6 +21,14 @@ export default function GlobalError({ error, reset }: { error: Error; reset: () 
           <p style={{ margin: "0 0 16px", lineHeight: 1.5 }}>
             Nothing was lost — no promise, task, or draft is changed by a failed page load.
           </p>
+          {/* The message is redacted in production; the digest is what the server log is
+              keyed by, so it is the only part worth showing. */}
+          {error.digest && (
+            <p style={{ margin: "0 0 16px", lineHeight: 1.5, fontSize: "14px" }}>
+              Quote this when reporting it:{" "}
+              <code style={{ fontFamily: "ui-monospace, monospace" }}>{error.digest}</code>
+            </p>
+          )}
           <button type="button" onClick={reset}
             style={{ font: "inherit", padding: "7px 13px", borderRadius: "6px",
               border: "1px solid currentColor", background: "transparent", cursor: "pointer" }}>

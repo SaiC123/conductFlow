@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startConnect, disconnectGoogle } from "@/app/actions/connect";
 import { Card, CardTitle, Badge, SectionHeading, buttonStyle } from "@/components/ui/primitives";
+import { failed } from "@/lib/actions/result";
 
 interface CapabilityRow {
   key: string; label: string; detail: string;
@@ -40,7 +41,14 @@ export function ConnectionList({ capabilities, connections }:
     setError(null);
     setBusyKey(key);
     startTransition(async () => {
-      try { await fn(); router.refresh(); }
+      try {
+        // startConnect ends in a redirect to Google, so on the happy path this never
+        // returns. Anything that does come back is a failure worth naming — an unknown
+        // capability, no session, or GOOGLE_CLIENT_ID missing from the deployment.
+        const result = await fn();
+        if (failed(result)) setError(result.error);
+        router.refresh();
+      }
       catch (e) { setError(e instanceof Error ? e.message : "That did not work."); }
       finally { setBusyKey(null); }
     });

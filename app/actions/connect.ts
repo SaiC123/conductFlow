@@ -9,6 +9,7 @@ import { getCurrentOrgId } from "@/lib/db/queries";
 import { logAudit } from "@/lib/audit/log";
 import { CAPABILITIES, isCapability } from "@/lib/google/scopes";
 import { CONNECT_STATE_COOKIE } from "@/lib/google/connect-state";
+import { reportable } from "@/lib/actions/result";
 
 async function siteOrigin(): Promise<string> {
   const h = await headers();
@@ -22,6 +23,12 @@ async function siteOrigin(): Promise<string> {
  * moment the capability is wanted, never bundled into sign-in.
  */
 export async function startConnect(capability: string) {
+  // The redirect at the end of `begin` throws NEXT_REDIRECT by design; `reportable` lets
+  // that one through untouched and converts only the real failures above it.
+  return reportable("startConnect", () => begin(capability));
+}
+
+async function begin(capability: string) {
   if (!isCapability(capability)) throw new Error("Unknown capability.");
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to connect an account.");
@@ -55,6 +62,10 @@ export async function startConnect(capability: string) {
 
 /** Disconnecting revokes; it never deletes. That an org once held a grant is audit history. */
 export async function disconnectGoogle(dataSourceId: string) {
+  return reportable("disconnectGoogle", () => revoke(dataSourceId));
+}
+
+async function revoke(dataSourceId: string) {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to disconnect an account.");
   const db = await getServerClient();

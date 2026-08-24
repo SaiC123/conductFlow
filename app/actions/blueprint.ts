@@ -4,6 +4,7 @@ import { getServerClient } from "@/lib/db/server";
 import { getCurrentOrgId } from "@/lib/db/queries";
 import { saveBlueprint } from "@/lib/agent/blueprint-store";
 import { EDITABLE_ACTIONS, DEFAULT_BLUEPRINT } from "@/lib/agent/blueprint";
+import { reportable } from "@/lib/actions/result";
 
 /** Changing what the agent may do is an owner decision, not a member one. */
 async function requireOwner() {
@@ -22,6 +23,13 @@ async function requireOwner() {
 }
 
 export async function updateBlueprint(formData: FormData) {
+  // Every message this path can produce was written for the owner reading it: "only an
+  // owner can change what the assistant is allowed to do", and each validation sentence
+  // from validateBlueprintEdit naming the action it rejected. All of them were redacted.
+  return reportable("updateBlueprint", () => saveEdit(formData));
+}
+
+async function saveEdit(formData: FormData) {
   const { orgId, db, userId } = await requireOwner();
 
   // Every editable action is submitted as unattended | approval | off, so an action left

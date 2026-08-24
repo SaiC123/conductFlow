@@ -7,10 +7,11 @@ import { parseTranscriptFile } from "@/lib/parse/transcript";
 import { runIngest, retryExtractionFor } from "@/lib/ingest/run";
 import { guardLlmBudget } from "@/lib/limits/rate-limit";
 import { UpstreamRateLimited } from "@/lib/agent/upstream-limit";
+import { logFailure } from "@/lib/observability/log";
 
 export async function ingestTranscript(formData: FormData) {
   const orgId = await getCurrentOrgId();
-  if (!orgId) throw new Error("Sign in to add a transcript.");
+  if (!orgId) return { error: "Sign in to add a transcript." };
   const db = await getServerClient();
   // Charged before the transcript is written, so a refused run leaves nothing half-done.
   const refused = await guardLlmBudget(db, orgId, "ingest_transcript");
@@ -27,7 +28,14 @@ export async function ingestTranscript(formData: FormData) {
 
   let text = pasted;
   if (file instanceof File && file.size > 0) {
-    text = parseTranscriptFile(file.name, await file.text());
+    // parseTranscriptFile rejects by throwing, and its three messages are the ones an owner
+    // most needs: the extension it will not read, the character count it will not accept,
+    // and an empty file. All three were arriving redacted.
+    try {
+      text = parseTranscriptFile(file.name, await file.text());
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "That file could not be read." };
+    }
   }
   if (!text.trim()) return { error: "Paste a transcript or choose a file." };
 
@@ -42,7 +50,10 @@ export async function ingestTranscript(formData: FormData) {
     const { data, error } = await db.from("client_contact")
       .insert({ org_id: orgId, name: newClientName, email: newClientEmail || null })
       .select("id,name").single();
-    if (error) throw error;
+    if (error) {
+      logFailure("ingestTranscript.createClient", error);
+      return { error: "That client could not be saved. Try again." };
+    }
     clientId = data.id; clientName = data.name;
   } else {
     if (!clientId) return { error: "Choose a client, or add a new one." };
@@ -69,7 +80,7 @@ export async function ingestTranscript(formData: FormData) {
 
 export async function retryExtraction(transcriptId: string) {
   const orgId = await getCurrentOrgId();
-  if (!orgId) throw new Error("Sign in to retry.");
+  if (!orgId) return { error: "Sign in to retry." };
   const db = await getServerClient();
   const refused = await guardLlmBudget(db, orgId, "retry_extraction");
   if (refused) return refused;

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { proposeRecurring } from "@/app/actions/proposals";
 import type { RecurringPattern } from "@/lib/ops/recurring";
 import { CardTitle, Badge, buttonStyle } from "@/components/ui/primitives";
+import { failed } from "@/lib/actions/result";
 
 export function RecurringSuggestions({ patterns }: { patterns: RecurringPattern[] }) {
   const router = useRouter();
@@ -61,7 +62,10 @@ export function RecurringSuggestions({ patterns }: { patterns: RecurringPattern[
                     setAdding(p.key);
                     startTransition(async () => {
                       try {
-                        await proposeRecurring(p.key);
+                        const result = await proposeRecurring(p.key);
+                        // "That needs approval first" is the blueprint answering. Marking
+                        // the row Added anyway would be the button lying about it.
+                        if (failed(result)) return setError(result.error);
                         setAdded((a) => [...a, p.key]);
                         router.refresh();
                       } catch (e) {

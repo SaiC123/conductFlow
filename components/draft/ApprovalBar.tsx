@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { approveAndCreateTask, rejectCommitment } from "@/app/actions/approvals";
 import { buttonStyle } from "@/components/ui/primitives";
+import { failed, type ActionFailed } from "@/lib/actions/result";
 
 // Not having Google connected is the normal case, not a failure worth interrupting for.
 const SILENT_REASONS = new Set(["missing", "revoked", "no draft to push"]);
@@ -23,11 +24,21 @@ export function ApprovalBar({ commitmentId }: { commitmentId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState<"approve" | "discard" | null>(null);
 
-  function run(action: (id: string) => Promise<{ pushed: boolean; reason?: string } | void>) {
+  function run(
+    action: (id: string) => Promise<{ pushed: boolean; reason?: string } | ActionFailed | void>,
+  ) {
     setError(null);
     startTransition(async () => {
       try {
         const result = await action(commitmentId);
+        // Checked before anything else: a refusal from the contract or a failed write comes
+        // back as data now, and navigating to /queue on one would report success for
+        // something that did not happen.
+        if (failed(result)) {
+          setError(result.error);
+          router.refresh();
+          return;
+        }
         // Approving also places the draft in Gmail. A push that did not happen for any
         // reason other than "no account connected" keeps the user here to see why —
         // silently landing back on the queue would imply it worked.

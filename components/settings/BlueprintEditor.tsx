@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateBlueprint } from "@/app/actions/blueprint";
 import { HARD_PROHIBITED } from "@/lib/agent/blueprint";
+import { failed } from "@/lib/actions/result";
 
 import {
   Card, CardTitle, Badge, SectionHeading, buttonStyle, fieldStyle,
@@ -81,7 +82,10 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
         setError(null); setSaved(null);
         startTransition(async () => {
           try {
-            await updateBlueprint(fd);
+            const result = await updateBlueprint(fd);
+            // A refusal names the action it rejected. Reporting a new version on top of one
+            // would be claiming a save that did not happen.
+            if (failed(result)) return setError(result.error);
             setSaved(view.version + 1);
             router.refresh();
           } catch (e) {

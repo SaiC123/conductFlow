@@ -2,10 +2,11 @@ import Link from "next/link";
 import { getCurrentOrgId } from "@/lib/db/queries";
 import { getServerClient } from "@/lib/db/server";
 import { loadBlueprint } from "@/lib/agent/blueprint-store";
-import { EDITABLE_ACTIONS } from "@/lib/agent/blueprint";
+import { EDITABLE_ACTIONS, DEFAULT_BLUEPRINT } from "@/lib/agent/blueprint";
 import { BlueprintEditor } from "@/components/settings/BlueprintEditor";
+import { logFailure } from "@/lib/observability/log";
 import {
-  PageHeader, Badge, BackLink, EmptyState, buttonStyle, pageStyle,
+  PageHeader, Badge, BackLink, EmptyState, Card, CardTitle, buttonStyle, pageStyle,
 } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,18 @@ export default async function BlueprintPage() {
     </main>);
 
   const db = await getServerClient();
-  const [blueprint, auth] = await Promise.all([loadBlueprint(db, orgId), db.auth.getUser()]);
+  // loadBlueprint throws on a read failure and stays that way on purpose — contractFor()
+  // sits behind it, and an enforcement path that treated "could not read" as "use the
+  // defaults" would fail open. Only this page, which merely displays it, is allowed to
+  // carry on: it shows the shipped defaults with a banner saying that is what they are.
+  const [stored, auth] = await Promise.all([
+    loadBlueprint(db, orgId).then((b) => ({ ok: true as const, b }))
+      .catch((e) => { logFailure("blueprintPage.load", e); return { ok: false as const }; }),
+    db.auth.getUser(),
+  ]);
+  const blueprint = stored.ok
+    ? stored.b
+    : { ...DEFAULT_BLUEPRINT, version: 0, created_at: null };
   const { data: membership } = await db.from("membership")
     .select("role").eq("org_id", orgId).eq("user_id", auth.data.user?.id ?? "").maybeSingle();
 
@@ -41,6 +53,17 @@ export default async function BlueprintPage() {
           </Badge>
         }
       />
+
+      {!stored.ok && (
+        <Card tone="danger" style={{ marginBottom: "var(--space-4)" }}>
+          <CardTitle tone="danger" dot>Your saved blueprint could not be read</CardTitle>
+          <p style={{ color: "var(--muted)", marginTop: "var(--space-2)", maxWidth: "62ch" }}>
+            What you see below is the shipped default, not your settings. Nothing has been
+            changed. Reload in a moment — and do not save from this screen until it loads
+            properly, or you will overwrite your own settings with these.
+          </p>
+        </Card>
+      )}
 
       <BlueprintEditor view={{
         version: blueprint.version,

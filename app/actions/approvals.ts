@@ -11,6 +11,7 @@ import {
 import { CAPABILITIES } from "@/lib/google/scopes";
 import { logAudit } from "@/lib/audit/log";
 import { revalidatePath } from "next/cache";
+import { reportable, type ActionFailed } from "@/lib/actions/result";
 import type { Commitment } from "@/lib/types";
 
 const GMAIL_COMPOSE_SCOPE = CAPABILITIES.gmail_drafts.scopes[0];
@@ -21,7 +22,15 @@ async function currentUserId(): Promise<string | null> {
   return data.user?.id ?? null;
 }
 
-export async function approveAndCreateTask(commitmentId: string) {
+export async function approveAndCreateTask(
+  commitmentId: string,
+): Promise<PushSummary | ActionFailed> {
+  // "action denied: prohibited", "Couldn't confirm what the agent is allowed to do" — the
+  // contract's own refusals, redacted at the moment somebody presses Approve.
+  return reportable("approveAndCreateTask", () => approve(commitmentId));
+}
+
+async function approve(commitmentId: string): Promise<PushSummary> {
   const uid = await currentUserId();
   const s = await getServerClient();
   const { data, error: fetchError } = await s.from("commitment").select("*")
@@ -46,7 +55,7 @@ export async function approveAndCreateTask(commitmentId: string) {
   );
   // The Gmail push is a separate, approval-gated action. It runs after the task exists so
   // a Google failure never costs the approval — the user can retry it from the review screen.
-  const push = await pushApprovedDraft(commitmentId, c.org_id, uid);
+  const push = await pushDraftFor(commitmentId, c.org_id, uid);
   revalidatePath("/queue");
   revalidatePath(`/queue/${commitmentId}`);
   return push;
@@ -60,8 +69,15 @@ export interface PushSummary { pushed: boolean; reason?: string }
  *
  * Returns rather than throws: an org with no Google connection is the normal case today,
  * not an error worth failing an approval over.
+ *
+ * **Not exported, and that is load-bearing.** Every export from a `"use server"` file is a
+ * POST endpoint any signed-in user can call with arguments of their choosing. This one takes
+ * `orgId` and hands it straight to `getServiceClient()`, which is above RLS — so as an export
+ * it would mint another org's Gmail token on request. The only caller is `approve` above,
+ * which reads `org_id` off the commitment through the RLS-scoped client, so the value can
+ * only ever be an org the caller is really a member of. Keep it that way.
  */
-export async function pushApprovedDraft(
+async function pushDraftFor(
   commitmentId: string, orgId: string, userId: string | null,
 ): Promise<PushSummary> {
   const s = await getServerClient();
@@ -93,6 +109,10 @@ export async function pushApprovedDraft(
 }
 
 export async function rejectCommitment(commitmentId: string) {
+  return reportable("rejectCommitment", () => reject(commitmentId));
+}
+
+async function reject(commitmentId: string) {
   const uid = await currentUserId();
   const s = await getServerClient();
   const { data, error: fetchError } = await s.from("commitment").select("*")

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setTaskStatus } from "@/app/actions/tasks";
 import { Badge, SectionHeading, StatusPill, buttonStyle } from "@/components/ui/primitives";
+import { failed } from "@/lib/actions/result";
 import type { BoardTask } from "@/lib/db/queries";
 import type { TaskStatus } from "@/lib/tasks/transitions";
 
@@ -96,7 +97,10 @@ export function TaskBoard({ items, nowIso }: { items: BoardTask[]; nowIso: strin
     setMovingId(taskId);
     startTransition(async () => {
       try {
-        await setTaskStatus(taskId, next);
+        const result = await setTaskStatus(taskId, next);
+        // An illegal move comes back as the instruction for fixing it — "reopen the task
+        // before marking it in progress" — rather than as a card that silently snaps back.
+        if (failed(result)) setErrors((prev) => ({ ...prev, [taskId]: result.error }));
         router.refresh();
       } catch (e) {
         setErrors((prev) => ({

@@ -6,6 +6,7 @@ import { detectRecurring } from "@/lib/ops/recurring";
 import { canExecute } from "@/lib/agent/execute-policy";
 import { contractFor } from "@/lib/agent/blueprint-store";
 import { logAudit } from "@/lib/audit/log";
+import { reportable } from "@/lib/actions/result";
 
 /**
  * Turns a detected pattern into a proposed commitment in the review queue.
@@ -16,6 +17,10 @@ import { logAudit } from "@/lib/audit/log";
  * whether the action is available at all.
  */
 export async function proposeRecurring(patternKey: string) {
+  return reportable("proposeRecurring", () => propose(patternKey));
+}
+
+async function propose(patternKey: string) {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Sign in to add a suggestion.");
   const db = await getServerClient();
