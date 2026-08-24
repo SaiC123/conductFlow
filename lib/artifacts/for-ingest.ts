@@ -66,6 +66,16 @@ export async function generateArtifactsForConversation(
     today: new Date().toISOString().slice(0, 10),
   });
 
+  // Recorded, not skipped, when the connection is missing. The blueprint asked for a
+  // document and none exists — an owner looking for it needs that sentence, and the table
+  // exists to hold exactly this answer.
+  if (wantsDocument && !driveReady) {
+    const detail = "Google Drive is not connected, so no document was created. "
+      + "Connect it in Settings.";
+    result.blocked.push(detail);
+    await record(args, "document", "missing_tokens", { detail });
+  }
+
   if (wantsDocument && driveReady) {
     try {
       const doc = await generateDocument(db, args.orgId, {
@@ -88,6 +98,13 @@ export async function generateArtifactsForConversation(
       result.blocked.push(`The document could not be created: ${detail}`);
       await record(args, "document", "failed", { detail });
     }
+  }
+
+  if (wantsEvent && !calendarReady) {
+    const detail = "Google Calendar is not connected, so no event was created. "
+      + "Connect it in Settings.";
+    result.blocked.push(detail);
+    await record(args, "calendar_event", "missing_tokens", { detail });
   }
 
   if (wantsEvent && calendarReady) {

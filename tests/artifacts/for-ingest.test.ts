@@ -170,7 +170,8 @@ describe("generateArtifactsForConversation", () => {
 
     expect(r.documentUrl).toContain("doc-1");
     expect(calls.copied).toBe(1);
-    expect(r.blocked).toEqual([]);
+    // The only thing blocked here is the disconnected calendar, never the document.
+    expect(r.blocked.join(" ")).not.toMatch(/document/i);
 
     const rows = await artifactRows(orgId);
     expect(rows.find((x) => x.kind === "document")?.outcome).toBe("created");
@@ -211,7 +212,12 @@ describe("generateArtifactsForConversation", () => {
     expect(calls.copied).toBe(0);
   });
 
-  it("skips the calendar entirely when the org has not granted it", async () => {
+  // This used to assert the opposite — no note, no row — on the reading that an org which
+  // had not granted calendar access "never asked for calendar writing". But wantsEvent comes
+  // from the blueprint, and the default blueprint does ask; only the Google grant is absent.
+  // That is what `missing_tokens` is for, so the owner is told rather than left wondering
+  // where their event went. Google is still never called.
+  it("never calls Calendar without a grant, but says so", async () => {
     const { orgId, conversationId } = await scenario(["proposal", "calendar"]);
     const { caps, calls } = capabilities("For {{client_name}}", { calendarReady: false });
 
@@ -219,9 +225,11 @@ describe("generateArtifactsForConversation", () => {
 
     expect(r.eventUrl).toBeNull();
     expect(calls.events).toBe(0);
-    // Not a blocked artifact: the org never asked for calendar writing.
-    expect(r.blocked).toEqual([]);
-    expect(await artifactRows(orgId)).toHaveLength(1);
+    expect(r.blocked.join(" ")).toMatch(/Calendar is not connected/i);
+
+    const rows = await artifactRows(orgId);
+    expect(rows.find((x) => x.kind === "calendar_event")?.outcome).toBe("missing_tokens");
+    expect(rows.find((x) => x.kind === "document")?.outcome).toBe("created");
   });
 
   // The whole module is best-effort: a Google outage must not undo a good extraction.
@@ -234,7 +242,9 @@ describe("generateArtifactsForConversation", () => {
 
     expect(r.documentUrl).toBeNull();
     expect(r.blocked.join(" ")).toMatch(/403/);
-    expect((await artifactRows(orgId))[0].outcome).toBe("failed");
+    // By kind, not by position: a disconnected calendar also writes a row now.
+    const rows = await artifactRows(orgId);
+    expect(rows.find((x) => x.kind === "document")?.outcome).toBe("failed");
   });
 
   // Regression: the ingest path hands this function the cookie-scoped `authenticated`
@@ -250,6 +260,29 @@ describe("generateArtifactsForConversation", () => {
 
     expect(r.documentUrl).toContain("doc-1");
     expect(await artifactRows(orgId)).toHaveLength(2);
+  });
+
+  // An org that has connected nothing gets no Doc and no event, which is fine — but it must
+  // be told. The table defines a `missing_tokens` outcome for exactly this, and the migration
+  // is explicit that blocked generations are recorded because "it is invisible if only
+  // successes are written down". Skipping the block silently was the same shape of bug as
+  // the RLS refusal above: the work did not happen and nothing said so.
+  it("records missing_tokens when Google is not connected", async () => {
+    const { orgId, conversationId } = await scenario(["proposal", "calendar"]);
+    const { caps, calls } = capabilities("For {{client_name}}",
+      { driveReady: false, calendarReady: false });
+
+    const r = await generateArtifactsForConversation(db, args(orgId, conversationId), caps);
+
+    expect(calls).toEqual({ copied: 0, events: 0 });
+    expect(r.documentUrl).toBeNull();
+    expect(r.eventUrl).toBeNull();
+
+    const rows = await artifactRows(orgId);
+    expect(rows).toHaveLength(2);
+    expect(rows.every((x) => x.outcome === "missing_tokens")).toBe(true);
+    // The owner needs the sentence, not just the row.
+    expect(r.blocked.join(" ")).toMatch(/connect/i);
   });
 
   it("puts the event on the soonest deadline the conversation carried", async () => {
