@@ -6,13 +6,26 @@ import { isUpstreamRateLimit, UpstreamRateLimited } from "@/lib/agent/upstream-l
 
 const schema = z.object({ ok: z.boolean() });
 
-/** The shape @ai-sdk/gateway throws when free-tier credit runs out mid-ingest. */
-function gatewayRateLimitError() {
+/** The bare error @ai-sdk/gateway raises when free-tier credit runs out. */
+function bareGatewayError() {
   const e = new Error(
     "Free tier requests on this model are rate-limited. Upgrade to paid credits for unrestricted access.",
   );
   e.name = "GatewayRateLimitError";
   (e as Error & { statusCode?: number }).statusCode = 429;
+  return e;
+}
+
+/**
+ * What actually reaches ConductFlow. The AI SDK retries internally first and wraps the
+ * failures in AI_RetryError, which carries no status of its own — the 429 is only visible
+ * on `lastError`. Verified against the live gateway: an unwrapped check never fires.
+ */
+function gatewayRateLimitError() {
+  const inner = bareGatewayError();
+  const e = new Error(`Failed after 3 attempts. Last error: ${inner.name}: ${inner.message}`);
+  e.name = "AI_RetryError";
+  Object.assign(e, { reason: "maxRetriesExceeded", errors: [inner, inner, inner], lastError: inner });
   return e;
 }
 
@@ -39,7 +52,20 @@ function modelFailingTimes(failures: number, error: () => Error) {
 
 describe("isUpstreamRateLimit", () => {
   it("recognises the gateway's rate-limit error by name", () => {
+    expect(isUpstreamRateLimit(bareGatewayError())).toBe(true);
+  });
+
+  // The one that matters: this is the shape production actually threw.
+  it("sees through the AI SDK's AI_RetryError wrapper to the 429 inside", () => {
     expect(isUpstreamRateLimit(gatewayRateLimitError())).toBe(true);
+  });
+
+  it("does not call an AI_RetryError a rate limit when the cause is something else", () => {
+    const inner = new Error("socket hang up");
+    const e = Object.assign(new Error("Failed after 3 attempts."), {
+      name: "AI_RetryError", errors: [inner], lastError: inner,
+    });
+    expect(isUpstreamRateLimit(e)).toBe(false);
   });
 
   it("recognises any 429 an upstream provider returns", () => {

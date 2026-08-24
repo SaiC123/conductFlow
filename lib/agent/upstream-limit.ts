@@ -17,15 +17,32 @@ export class UpstreamRateLimited extends Error {
   }
 }
 
+/** Wrappers nest at most a couple deep; the bound is here so a cyclic `cause` cannot spin. */
+const MAX_DEPTH = 5;
+
 /**
  * Matched by name and status rather than `instanceof`, deliberately. GatewayRateLimitError
  * lives in @ai-sdk/gateway, which reaches us only as a transitive dependency of `ai`;
  * importing it directly would pin a package we do not declare, and the check would then
  * silently stop matching if the provider changed. A 429 is a 429 whoever threw it.
+ *
+ * Unwrapping is the whole job. The AI SDK retries internally before giving up and hands
+ * back an AI_RetryError — name "AI_RetryError", no statusCode of its own, the real 429
+ * only reachable through `lastError`/`errors`. That is the shape production threw, so a
+ * check that looked only at the outermost error would never once have fired.
  */
-export function isUpstreamRateLimit(e: unknown): boolean {
-  if (typeof e !== "object" || e === null) return false;
-  const err = e as { name?: unknown; statusCode?: unknown; status?: unknown };
+export function isUpstreamRateLimit(e: unknown, depth = 0): boolean {
+  if (depth > MAX_DEPTH || typeof e !== "object" || e === null) return false;
+  const err = e as {
+    name?: unknown; statusCode?: unknown; status?: unknown;
+    lastError?: unknown; errors?: unknown; cause?: unknown;
+  };
+
   if (err.name === "GatewayRateLimitError") return true;
-  return err.statusCode === 429 || err.status === 429;
+  if (err.statusCode === 429 || err.status === 429) return true;
+
+  if (isUpstreamRateLimit(err.lastError, depth + 1)) return true;
+  if (Array.isArray(err.errors)
+    && err.errors.some((inner) => isUpstreamRateLimit(inner, depth + 1))) return true;
+  return isUpstreamRateLimit(err.cause, depth + 1);
 }
