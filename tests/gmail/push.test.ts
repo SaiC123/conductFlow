@@ -44,10 +44,30 @@ function fakeDb(tables: Record<string, Row[]>): SupabaseClient {
         },
         update(patch: Row) {
           return {
-            async eq(column: string, value: unknown) {
-              const row = rows().find((r) => r[column] === value);
-              if (row) Object.assign(row, patch);
-              return { error: null };
+            eq(column: string, value: unknown) {
+              const matching = (extra?: (r: Row) => boolean) =>
+                rows().filter((r) => r[column] === value && (!extra || extra(r)));
+              const apply = (extra?: (r: Row) => boolean) => {
+                const matched = matching(extra);
+                matched.forEach((r) => Object.assign(r, patch));
+                return matched;
+              };
+              return {
+                is(column2: string, value2: unknown) {
+                  return {
+                    select() {
+                      const matched = apply((r) => (r[column2] ?? null) === value2);
+                      return Promise.resolve({
+                        data: matched.map((r) => ({ id: r.id })), error: null,
+                      });
+                    },
+                  };
+                },
+                then(onFulfilled: (v: { error: null }) => unknown, onRejected?: (e: unknown) => unknown) {
+                  apply();
+                  return Promise.resolve({ error: null }).then(onFulfilled, onRejected);
+                },
+              };
             },
           };
         },
@@ -229,7 +249,7 @@ describe("pushDraftToGmail", () => {
     const now = new Date("2026-08-12T10:00:00.000Z");
 
     const result = await pushDraftToGmail(
-      fakeDb(tables), { draftId: DRAFT, userId: USER, from: "owner@demo.test", now }, gmail);
+      fakeDb(tables), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test", now }, gmail);
 
     expect(result.outcome).toBe("pushed");
     expect(result.providerDraftId).toBe("gmail-draft-1");
@@ -245,7 +265,7 @@ describe("pushDraftToGmail", () => {
   it("addresses the draft to the client on the commitment", async () => {
     const gmail = new FakeGmailClient();
     await pushDraftToGmail(
-      fakeDb(seed()), { draftId: DRAFT, userId: USER, from: "owner@demo.test" }, gmail);
+      fakeDb(seed()), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail);
 
     const mime = Buffer.from(gmail.created[0], "base64url").toString("utf8");
     expect(mime).toContain("To: parent@example.com");
@@ -255,7 +275,7 @@ describe("pushDraftToGmail", () => {
   it("audits the push with the hash of the exact bytes handed to Gmail", async () => {
     const gmail = new FakeGmailClient();
     await pushDraftToGmail(
-      fakeDb(seed()), { draftId: DRAFT, userId: USER, from: "owner@demo.test" }, gmail);
+      fakeDb(seed()), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail);
 
     expect(logAudit).toHaveBeenCalledWith({
       orgId: ORG, actor: "agent", action: "create",
@@ -269,7 +289,7 @@ describe("pushDraftToGmail", () => {
     const gmail = new FakeGmailClient({ exists: true });
 
     const result = await pushDraftToGmail(
-      fakeDb(tables), { draftId: DRAFT, userId: USER, from: "owner@demo.test" }, gmail);
+      fakeDb(tables), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail);
 
     expect(result.outcome).toBe("already_pushed");
     expect(gmail.created).toHaveLength(0);
@@ -281,7 +301,7 @@ describe("pushDraftToGmail", () => {
     const gmail = new FakeGmailClient({ exists: false, draftId: "gmail-draft-2" });
 
     const result = await pushDraftToGmail(
-      fakeDb(tables), { draftId: DRAFT, userId: USER, from: "owner@demo.test" }, gmail);
+      fakeDb(tables), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail);
 
     expect(result.outcome).toBe("recreated");
     expect(gmail.fetched).toEqual(["stale-draft"]);
@@ -293,7 +313,7 @@ describe("pushDraftToGmail", () => {
     const gmail = new FakeGmailClient();
 
     const result = await pushDraftToGmail(
-      fakeDb(tables), { draftId: DRAFT, userId: USER, from: "owner@demo.test" }, gmail);
+      fakeDb(tables), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail);
 
     expect(result.outcome).toBe("skipped_no_recipient");
     expect(gmail.created).toHaveLength(0);
@@ -308,7 +328,7 @@ describe("pushDraftToGmail", () => {
     });
 
     await expect(pushDraftToGmail(
-      fakeDb(tables), { draftId: DRAFT, userId: USER, from: "owner@demo.test" }, gmail))
+      fakeDb(tables), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail))
       .rejects.toBeInstanceOf(GmailRateLimitError);
 
     const row = tables.deliverable_draft[0];
@@ -319,13 +339,64 @@ describe("pushDraftToGmail", () => {
 
   it("throws when the draft row does not exist", async () => {
     await expect(pushDraftToGmail(
-      fakeDb(seed()), { draftId: "missing", userId: USER, from: "owner@demo.test" },
+      fakeDb(seed()), { draftId: "missing", orgId: ORG, userId: USER, from: "owner@demo.test" },
       new FakeGmailClient())).rejects.toThrow(/not found/i);
   });
 
   it("requires an access token when no client is injected", async () => {
     await expect(pushDraftToGmail(
-      fakeDb(seed()), { draftId: DRAFT, userId: USER, from: "owner@demo.test" }))
+      fakeDb(seed()), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }))
       .rejects.toThrow(/access token/i);
+  });
+
+  const OTHER_ORG = "00000000-0000-0000-0000-00000000000b";
+
+  it("refuses a draft that does not belong to the caller's own org", async () => {
+    await expect(pushDraftToGmail(
+      fakeDb(seed()),
+      { draftId: DRAFT, orgId: OTHER_ORG, userId: USER, from: "owner@demo.test" },
+      new FakeGmailClient()),
+    ).rejects.toThrow(/does not belong/i);
+  });
+
+  it("refuses to resolve a recipient when the draft's commitment belongs to a foreign org", async () => {
+    // The draft itself is in ORG (passes the direct org check), but its commitment_id has
+    // been pointed at a commitment that actually lives in a different org — the forged-row
+    // shape from the cross-org leak this closes.
+    const tables = seed();
+    tables.commitment[0].org_id = OTHER_ORG;
+    const gmail = new FakeGmailClient();
+
+    const result = await pushDraftToGmail(
+      fakeDb(tables), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail);
+
+    expect(result.outcome).toBe("skipped_no_recipient");
+    expect(gmail.created).toHaveLength(0);
+  });
+
+  it("does not create a second Gmail draft when two pushes race on the same row", async () => {
+    const tables = seed();
+    const gmail = new FakeGmailClient();
+    const db = fakeDb(tables);
+
+    const [first, second] = await Promise.all([
+      pushDraftToGmail(db, { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail),
+      pushDraftToGmail(db, { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail),
+    ]);
+
+    const outcomes = [first.outcome, second.outcome].sort();
+    expect(outcomes).toEqual(["already_pushed", "pushed"]);
+    expect(gmail.created).toHaveLength(1);
+  });
+
+  it("releases the claim so a throttled push can be retried", async () => {
+    const tables = seed();
+    const gmail = new FakeGmailClient({ failWith: new GmailRateLimitError("throttled", 429, 1) });
+
+    await expect(pushDraftToGmail(
+      fakeDb(tables), { draftId: DRAFT, orgId: ORG, userId: USER, from: "owner@demo.test" }, gmail),
+    ).rejects.toBeInstanceOf(GmailRateLimitError);
+
+    expect(tables.deliverable_draft[0].provider_draft_id).toBeNull();
   });
 });
