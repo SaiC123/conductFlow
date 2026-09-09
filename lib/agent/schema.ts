@@ -13,7 +13,9 @@ export const commitmentSchema = z.object({
   deadline: z.string().nullable().describe("Absolute date, YYYY-MM-DD. Null if no date was stated."),
   type: z.enum(["email", "deliverable", "meeting", "call", "other"]),
   confidence: z.enum(["high", "medium", "low"]),
-  source_span: z.string().min(1).describe("Verbatim quote from the transcript that states this promise."),
+  source_span: z.string().min(1).refine((s) => s.trim().length > 0, {
+    message: "source_span must not be blank.",
+  }).describe("Verbatim quote from the transcript that states this promise."),
 });
 
 export const extractionSchema = z.object({
@@ -21,7 +23,13 @@ export const extractionSchema = z.object({
 });
 
 export const draftSchema = z.object({
-  subject: z.string().min(1).describe("Email subject line. Plain text, no greeting, under 60 characters."),
+  // A newline here isn't just untidy — `buildRawMessage` (lib/gmail/mime.ts) refuses any
+  // header value containing one, so an ungated multiline subject reaches the database, gets
+  // shown as an approvable draft, and only then blows up the Gmail push. Rejecting it here
+  // instead sends the model back for a retry (generateObjectWithRetry) before anything is saved.
+  subject: z.string().min(1).max(200).refine((s) => !/[\r\n]/.test(s), {
+    message: "Subject must be a single line, no line breaks.",
+  }).describe("Email subject line. Plain text, single line, no greeting, under 60 characters."),
   body: z.string().min(1).describe("The message body: two or three sentences, greeting and sign-off included."),
 });
 

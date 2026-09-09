@@ -19,6 +19,32 @@ interface OverdueTask {
   due: string;
 }
 
+// PostgREST caps a single response at `api.max_rows` (1,000 per supabase/config.toml) —
+// without pagination, an org with a backlog past that cap has its overdue query silently
+// truncated, and since an unreminded task never leaves the overdue set until it's done,
+// the same first page can occupy the truncation on every run and starve the rest forever.
+const PAGE_SIZE = 1000;
+
+async function fetchOverdueTasks(
+  db: SupabaseClient, now: Date, orgId?: string,
+): Promise<OverdueTask[]> {
+  const tasks: OverdueTask[] = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    let query = db.from("task").select("id,org_id,due")
+      .lt("due", now.toISOString()).neq("status", "done").not("due", "is", null)
+      // Explicit order: range-based pagination over an unordered query has no guarantee
+      // that two pages don't overlap or skip rows.
+      .order("id", { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (orgId) query = query.eq("org_id", orgId);
+    const { data, error } = await query;
+    if (error) throw error;
+    const page = (data ?? []) as OverdueTask[];
+    tasks.push(...page);
+    if (page.length < PAGE_SIZE) return tasks;
+  }
+}
+
 /**
  * Raises one open reminder per overdue task. Idempotent: tasks that already carry an open
  * reminder are counted, not re-nudged, and the partial unique index in migration 0004 is
@@ -31,13 +57,7 @@ export async function sweepReminders(
   const now = options.now ?? new Date();
   const actor = options.actor ?? "agent";
 
-  let query = db.from("task").select("id,org_id,due")
-    .lt("due", now.toISOString()).neq("status", "done").not("due", "is", null);
-  if (options.orgId) query = query.eq("org_id", options.orgId);
-
-  const { data, error } = await query;
-  if (error) throw error;
-  const tasks = (data ?? []) as OverdueTask[];
+  const tasks = await fetchOverdueTasks(db, now, options.orgId);
   if (tasks.length === 0) return { raised: 0, alreadyOpen: 0 };
 
   const { data: openRows, error: openError } = await db.from("reminder")
