@@ -2,6 +2,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startConnect, disconnectGoogle } from "@/app/actions/connect";
+import { TemplatePicker } from "@/components/settings/TemplatePicker";
 import { Card, CardTitle, Badge, SectionHeading, buttonStyle } from "@/components/ui/primitives";
 
 interface CapabilityRow {
@@ -96,6 +97,7 @@ export function ConnectionList({ capabilities, connections }:
                     {busy ? "Opening…" : c.connected ? "Reconnect" : "Connect"}
                   </button>
                 </div>
+                {c.key === "drive_templates" && c.connected && <TemplatePicker disabled={isPending} />}
               </Card>
             </li>
           );
