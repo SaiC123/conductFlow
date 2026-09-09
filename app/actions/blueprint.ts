@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { getServerClient } from "@/lib/db/server";
 import { getCurrentOrgId } from "@/lib/db/queries";
-import { saveBlueprint } from "@/lib/agent/blueprint-store";
+import { loadBlueprint, saveBlueprint } from "@/lib/agent/blueprint-store";
 import { EDITABLE_ACTIONS, DEFAULT_BLUEPRINT } from "@/lib/agent/blueprint";
 
 /** Changing what the agent may do is an owner decision, not a member one. */
@@ -38,8 +38,10 @@ export async function updateBlueprint(formData: FormData) {
   const metric = String(formData.get("successMetric") ?? "").trim()
     || DEFAULT_BLUEPRINT.success_metric;
 
+  // Sources have no controls in this form; saving must not widen an existing restriction.
+  const current = await loadBlueprint(db, orgId);
   await saveBlueprint(db, orgId, {
-    allowed_sources: DEFAULT_BLUEPRINT.allowed_sources,
+    allowed_sources: current.allowed_sources,
     permitted_actions: permitted,
     required_approvals: gated,
     escalation_conditions: DEFAULT_BLUEPRINT.escalation_conditions,

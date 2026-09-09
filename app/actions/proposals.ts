@@ -20,7 +20,8 @@ export async function proposeRecurring(patternKey: string) {
   if (!orgId) throw new Error("Sign in to add a suggestion.");
   const db = await getServerClient();
 
-  const decision = canExecute("propose_recurring_task", true, await contractFor(db, orgId));
+  const decision = canExecute("propose_recurring_task", true, await contractFor(db, orgId),
+    { sources: ["client_contact"] });
   if (!decision.ok) {
     throw new Error(decision.reason === "needs_approval"
       ? "That needs approval first."

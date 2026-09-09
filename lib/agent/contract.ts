@@ -7,6 +7,8 @@ export interface AgentContract {
   escalationConditions: string[];
   successMetric: string;
   expiresInMinutes: number;
+  /** No saved timestamp (including shipped defaults) means no unattended expiry. */
+  createdAt: string | null;
 }
 export const firstAgentContract: AgentContract = {
   trigger: "approved transcript ready for extraction",
@@ -20,4 +22,5 @@ export const firstAgentContract: AgentContract = {
   escalationConditions: ["complaint", "legal_concern", "missing_owner_or_deadline"],
   successMetric: "follow_up_sent_within_24h",
   expiresInMinutes: 60,
+  createdAt: null,
 };

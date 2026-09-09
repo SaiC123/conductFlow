@@ -24,7 +24,7 @@ describe("blueprintToContract", () => {
       permitted_actions: ["send_external_email", "draft_recap"],
       required_approvals: ["send_external_email"],
     });
-    const decision = canExecute("send_external_email", true, contract);
+    const decision = canExecute("send_external_email", true, contract, { sources: [] });
     expect(decision.ok).toBe(false);
     expect(decision.reason).toBe("prohibited");
   });
@@ -35,14 +35,14 @@ describe("blueprintToContract", () => {
       permitted_actions: ["draft_recap", "create_internal_task"],
       required_approvals: ["push_email_draft"],
     });
-    expect(canExecute("create_internal_task", false, contract).ok).toBe(true);
-    expect(canExecute("push_email_draft", false, contract).ok).toBe(false);
-    expect(canExecute("push_email_draft", true, contract).ok).toBe(true);
+    expect(canExecute("create_internal_task", false, contract, { sources: [] }).ok).toBe(true);
+    expect(canExecute("push_email_draft", false, contract, { sources: ["client_contact"] }).ok).toBe(false);
+    expect(canExecute("push_email_draft", true, contract, { sources: ["client_contact"] }).ok).toBe(true);
   });
 
   it("still denies an action nobody listed", () => {
     const contract = blueprintToContract(DEFAULT_BLUEPRINT);
-    expect(canExecute("wire_the_money", true, contract).reason).toBe("unknown_action");
+    expect(canExecute("wire_the_money", true, contract, { sources: [] }).reason).toBe("unknown_action");
   });
 
   it("separates an action the owner turned off from one that does not exist", () => {
@@ -54,10 +54,10 @@ describe("blueprintToContract", () => {
       permitted_actions: [],
       required_approvals: [],
     });
-    expect(canExecute("push_email_draft", true, contract)).toEqual({
+    expect(canExecute("push_email_draft", true, contract, { sources: ["client_contact"] })).toEqual({
       ok: false, reason: "turned_off",
     });
-    expect(canExecute("wire_the_money", true, contract).reason).toBe("unknown_action");
+    expect(canExecute("wire_the_money", true, contract, { sources: [] }).reason).toBe("unknown_action");
   });
 });
 
@@ -85,9 +85,9 @@ describe("blueprintToContract re-applies ALWAYS_NEEDS_APPROVAL", () => {
 
   it("denies the forged action without approval and allows it with", () => {
     const c = blueprintToContract(forged);
-    expect(canExecute("push_email_draft", false, c))
+    expect(canExecute("push_email_draft", false, c, { sources: ["client_contact"] }))
       .toEqual({ ok: false, reason: "needs_approval" });
-    expect(canExecute("push_email_draft", true, c))
+    expect(canExecute("push_email_draft", true, c, { sources: ["client_contact"] }))
       .toEqual({ ok: true, reason: "approved" });
   });
 
@@ -106,7 +106,7 @@ describe("blueprintToContract re-applies ALWAYS_NEEDS_APPROVAL", () => {
       permitted_actions: ["draft_recap", "send_external_email"],
     });
     expect(c.permittedActions).toEqual(["draft_recap"]);
-    expect(canExecute("send_external_email", true, c))
+    expect(canExecute("send_external_email", true, c, { sources: [] }))
       .toEqual({ ok: false, reason: "prohibited" });
   });
 
