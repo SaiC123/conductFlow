@@ -45,6 +45,29 @@ export const draftSchema = z.object({
   body: z.string().min(1).describe("The message body: two or three sentences, greeting and sign-off included."),
 });
 
+export const MAX_INQUIRY_CHARS = 20_000;
+
+export const leadTriageSchema = z.object({
+  name: z.string().nullable().describe("The prospect's name, if stated. Null if not given."),
+  email: z.string().nullable().describe(
+    "The prospect's email address, only if it literally appears in the inquiry text. Null otherwise — never invent one."),
+  serviceInterest: z.string().max(300).nullable().describe(
+    "What they're asking about, in a few words. Null if genuinely unclear."),
+  urgency: z.enum(["low", "medium", "high"]).describe("How time-sensitive the request reads."),
+  replyType: z.enum(["qualify", "intake", "booking"]).describe(
+    "qualify: too vague to act on, ask what they need. intake: clear need, ask the specific missing details "
+    + "(budget, timing, location, etc). booking: everything needed is already stated, offer to schedule."),
+  // Same MIME-safety reasoning as draftSchema's subject field.
+  replySubject: z.string().min(1).max(200).refine((s) => !/[\r\n]/.test(s), {
+    message: "Subject must be a single line, no line breaks.",
+  }).describe("Email subject line. Plain text, single line, under 60 characters."),
+  replyBody: z.string().min(1).describe(
+    "The draft reply: two or three sentences, matching replyType. Never promises a price, timeline, or "
+    + "availability the inquiry didn't already state."),
+});
+
+export type LeadTriage = z.infer<typeof leadTriageSchema>;
+
 export type ExtractedCommitment = z.infer<typeof commitmentSchema> & {
   span_verified: boolean;
 };
