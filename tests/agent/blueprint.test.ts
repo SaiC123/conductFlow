@@ -112,7 +112,7 @@ describe("blueprintToContract re-applies ALWAYS_NEEDS_APPROVAL", () => {
 
   it("leaves an untouched default blueprint alone", () => {
     const c = blueprintToContract(DEFAULT_BLUEPRINT);
-    expect(c.permittedActions).toEqual(["draft_recap", "draft_task_list", "draft_follow_up"]);
+    expect(c.permittedActions).toEqual(DEFAULT_BLUEPRINT.permitted_actions);
   });
 });
 

@@ -6,6 +6,18 @@ import { z } from "zod";
 export const EXTRACTION_MODEL = "openai/gpt-oss-120b";
 export const MAX_TRANSCRIPT_CHARS = 250_000;
 export const MAX_COMMITMENTS = 50;
+export const MAX_SCOPE_SUMMARY_CHARS = 20_000;
+export const MAX_SCOPE_REQUEST_CHARS = 10_000;
+export const MAX_SCOPE_REASON_CHARS = 500;
+
+export const scopeCheckSchema = z.object({
+  covered: z.boolean().describe("Whether the entire request is covered by the agreed scope."),
+  reason: z.string().min(1).max(MAX_SCOPE_REASON_CHARS).refine((s) => s.trim().length > 0, {
+    message: "Scope reason must not be blank.",
+  }).describe("A brief explanation grounded in the scope, identifying any unsupported work."),
+});
+
+export type ScopeCheck = z.infer<typeof scopeCheckSchema>;
 
 export const commitmentSchema = z.object({
   text: z.string().min(1).describe("The promise, as an imperative task. No speaker prefix."),
