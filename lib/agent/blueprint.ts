@@ -29,6 +29,7 @@ export const EDITABLE_ACTIONS = [
   "draft_change_order",
   "draft_invoice",
   "draft_collections_reminder",
+  "draft_review_request",
 ] as const;
 
 /**
@@ -53,7 +54,7 @@ export const DEFAULT_BLUEPRINT: BlueprintRow = {
   allowed_sources: ["transcript", "client_contact", "template", "scope_of_work"],
   permitted_actions: ["draft_recap", "draft_task_list", "draft_follow_up",
     "draft_retainer_renewal", "draft_document_reminder", "draft_reschedule_offer", "draft_change_order",
-    "draft_invoice", "draft_collections_reminder"],
+    "draft_invoice", "draft_collections_reminder", "draft_review_request"],
   required_approvals: ["push_email_draft", "edit_crm", "create_internal_task",
     "propose_recurring_task"],
   escalation_conditions: ["complaint", "legal_concern", "missing_owner_or_deadline"],
