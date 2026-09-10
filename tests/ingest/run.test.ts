@@ -169,6 +169,44 @@ describe("runIngest", () => {
     expect(newCommitments!).toHaveLength(1);
   });
 
+  it("does not auto-draft follow-ups when the blueprint requires approval for them", async () => {
+    const { DEFAULT_BLUEPRINT } = await import("@/lib/agent/blueprint");
+    const { data: current } = await db.from("agent_blueprint").select("version")
+      .eq("org_id", orgA).order("version", { ascending: false }).limit(1).maybeSingle();
+    const nextVersion = (current?.version as number | undefined ?? 0) + 1;
+
+    await db.from("agent_blueprint").insert({
+      org_id: orgA, version: nextVersion,
+      allowed_sources: DEFAULT_BLUEPRINT.allowed_sources,
+      permitted_actions: ["draft_recap", "draft_task_list"],
+      required_approvals: [...DEFAULT_BLUEPRINT.required_approvals, "draft_follow_up"],
+      escalation_conditions: DEFAULT_BLUEPRINT.escalation_conditions,
+      success_metric: DEFAULT_BLUEPRINT.success_metric,
+      expires_in_minutes: DEFAULT_BLUEPRINT.expires_in_minutes,
+    });
+
+    try {
+      const r = await runIngest(db, args, bothCalls);
+      expect(r.commitmentCount).toBe(1);
+      expect(r.draftCount).toBe(0);
+
+      const { data: c } = await db.from("commitment").select("id")
+        .eq("conversation_id", r.conversationId);
+      const { data: d } = await db.from("deliverable_draft").select("id")
+        .eq("commitment_id", c![0].id);
+      expect(d).toHaveLength(0);
+    } finally {
+      // Restore the default so later tests (in this file and any other sharing org A) keep
+      // seeing the permissive blueprint they were written against.
+      const { data: latest } = await db.from("agent_blueprint").select("version")
+        .eq("org_id", orgA).order("version", { ascending: false }).limit(1).maybeSingle();
+      await db.from("agent_blueprint").insert({
+        org_id: orgA, version: (latest?.version as number ?? nextVersion) + 1,
+        ...DEFAULT_BLUEPRINT,
+      });
+    }
+  });
+
   it("pairs each draft with its own commitment, not with array position", async () => {
     const r = await runIngest(db, args, pairingMock());
     expect(r.commitmentCount).toBe(2);

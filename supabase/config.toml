@@ -339,7 +339,7 @@ email_optional = false
 # test the real flow locally. Sign-in requests identity scopes only — Drive, Calendar, and
 # Gmail are granted separately from Settings.
 [auth.external.google]
-enabled = true
+enabled = false
 client_id = "env(GOOGLE_CLIENT_ID)"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
 # Local sign-in with Google requires the nonce check to be skipped.

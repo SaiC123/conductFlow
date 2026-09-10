@@ -212,13 +212,14 @@ export function BlueprintEditor({ view }: { view: BlueprintView }) {
               </span>
             </label>
             <label style={{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>
-              Permission expires after
+              Unattended permission expires after
               <input name="expiresInMinutes" type="number" min={1} max={1440}
                 defaultValue={view.expiresInMinutes} disabled={!view.canEdit || isPending}
                 className="mono" style={fieldStyle} />
               <span style={{ display: "block", color: "var(--faint)",
                 fontSize: "var(--text-xs)", marginTop: "var(--space-2)" }}>
-                Minutes before a granted permission has to be re-established. 1–1440.
+                Minutes from saving this version until actions set to &ldquo;on its own&rdquo;
+                need approval. Save a new version to renew. 1–1440. Shipped defaults do not expire.
               </span>
             </label>
           </div>

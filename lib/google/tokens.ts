@@ -26,6 +26,14 @@ const cache = new Map<string, CachedToken>();
 /** Exported for tests; a process restart clears this anyway. */
 export function clearTokenCache() { cache.clear(); }
 
+/**
+ * Drops one connection's cached access token, forcing the next `getAccessToken` call to
+ * refresh instead of reusing a token the provider just rejected (a downstream 401 from
+ * Gmail, say). Narrower than `clearTokenCache` so one org's rejection can't cost every
+ * other org an extra refresh round trip.
+ */
+export function invalidateCachedToken(dataSourceId: string) { cache.delete(dataSourceId); }
+
 export function aadFor(orgId: string, provider: string, externalAccountId: string): string {
   return `${orgId}:${provider}:${externalAccountId}`;
 }
@@ -72,11 +80,15 @@ export async function getAccessToken(
 
   const refreshed = await refreshAccessToken(refreshToken, deps);
   if (!refreshed.ok) {
-    // A refusal here is usually a revoked grant, and it stays visible on the settings
-    // screen rather than failing silently on every later call.
-    await db.from("connected_data_source")
-      .update({ state: "error", last_error: refreshed.error, updated_at: new Date(now).toISOString() })
-      .eq("id", row.id);
+    // Only a permanent refusal (the grant itself is gone) is worth surfacing on the
+    // settings screen as needing reconnection. A transient one — Google's token endpoint
+    // rate-limiting or erroring for a moment — must not strand a healthy connection in
+    // `error` state, or every later call rejects before even trying to refresh again.
+    if (refreshed.permanent) {
+      await db.from("connected_data_source")
+        .update({ state: "error", last_error: refreshed.error, updated_at: new Date(now).toISOString() })
+        .eq("id", row.id);
+    }
     throw new DataSourceUnavailable(refreshed.error, "refused");
   }
 
@@ -100,7 +112,7 @@ export async function getAccessToken(
 
 type RefreshOutcome =
   | { ok: true; accessToken: string; expiresInSeconds: number }
-  | { ok: false; error: string };
+  | { ok: false; error: string; permanent: boolean };
 
 async function refreshAccessToken(
   refreshToken: string, deps: TokenDeps,
@@ -120,10 +132,14 @@ async function refreshAccessToken(
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const detail = typeof body?.error === "string" ? body.error : `HTTP ${response.status}`;
-    return { ok: false, error: `Google refused the refresh: ${detail}` };
+    // `invalid_grant` is Google's own signal that the refresh token itself is dead — every
+    // other failure (rate limiting, a 5xx, a network blip) is worth retrying later, not a
+    // reason to mark the connection broken.
+    const permanent = body?.error === "invalid_grant";
+    return { ok: false, error: `Google refused the refresh: ${detail}`, permanent };
   }
   if (typeof body?.access_token !== "string")
-    return { ok: false, error: "Google returned no access token." };
+    return { ok: false, error: "Google returned no access token.", permanent: false };
 
   return {
     ok: true,
@@ -149,6 +165,20 @@ export interface StoreGrantArgs {
 export async function storeGrant(db: SupabaseClient, args: StoreGrantArgs): Promise<string> {
   const aad = aadFor(args.orgId, "google", args.externalAccountId);
   const sealed: SealedToken = sealRefreshToken(args.refreshToken, aad);
+
+  // One org holds one active Google connection. The upsert below keys on
+  // (org_id, provider, external_account_id), so connecting a *different* Google account
+  // would otherwise insert a second row instead of replacing the first — `getAccessToken`'s
+  // `.maybeSingle()` lookup then errors on finding two. Revoke any other active row first so
+  // reconnecting with a new account cleanly supersedes the old one.
+  const { data: others } = await db.from("connected_data_source")
+    .select("id").eq("org_id", args.orgId).eq("provider", "google").eq("state", "active")
+    .neq("external_account_id", args.externalAccountId);
+  if (others && others.length > 0) {
+    await db.from("connected_data_source")
+      .update({ state: "revoked", updated_at: new Date().toISOString() })
+      .in("id", others.map((r) => r.id as string));
+  }
 
   const { data, error } = await db.from("connected_data_source").upsert({
     org_id: args.orgId, provider: "google",

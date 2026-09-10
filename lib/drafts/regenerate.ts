@@ -3,6 +3,7 @@ import type { LanguageModel } from "ai";
 import { generateFollowUpDraft } from "@/lib/agent/draft";
 import { canExecute } from "@/lib/agent/execute-policy";
 import { contractFor } from "@/lib/agent/blueprint-store";
+import { CLEARED as CLEARED_PROVIDER_COLUMNS } from "@/lib/gmail/push";
 import { logAudit } from "@/lib/audit/log";
 
 export interface RegenerateArgs {
@@ -30,8 +31,13 @@ export async function regenerateDraftFor(
   if (!commitment) throw new Error("commitment not found");
 
   // Checked after the lookup, because the org to check against comes from the commitment.
-  const decision = canExecute("draft_follow_up", false,
-    await contractFor(db, commitment.org_id as string));
+  // `approved: true` — an owner clicking "Rewrite draft" is an explicit human approval of
+  // this one action, the same as clicking approve on the review screen. Passing `false`
+  // here made an "ask first" `draft_follow_up` setting deny every rewrite unconditionally,
+  // since nothing else in this path ever supplies approval.
+  const decision = canExecute("draft_follow_up", true,
+    await contractFor(db, commitment.org_id as string),
+    { sources: ["transcript", "client_contact"] });
   if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
 
   const { data: client } = await db.from("client_contact")
@@ -50,8 +56,12 @@ export async function regenerateDraftFor(
   const replaced = (existing ?? []).length > 0;
 
   if (replaced) {
+    // Clearing the provider link, not just the text: a draft already pushed to Gmail keeps
+    // `provider_draft_id` set, and `pushDraftToGmail` treats that as "already pushed" and
+    // skips it — leaving the live Gmail draft holding the pre-rewrite content forever. This
+    // makes the next push see no provider link and create/update the Gmail draft afresh.
     const { error: updateError } = await db.from("deliverable_draft")
-      .update({ subject: draft.subject, body: draft.body })
+      .update({ subject: draft.subject, body: draft.body, ...CLEARED_PROVIDER_COLUMNS })
       .eq("commitment_id", commitment.id).eq("org_id", commitment.org_id);
     if (updateError) throw updateError;
   } else {

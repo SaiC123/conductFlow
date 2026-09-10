@@ -62,7 +62,7 @@ export const DEFAULT_BLUEPRINT: BlueprintRow = {
  * that never passed through the editor — a forged PostgREST insert, say — cannot grant an
  * external action unattended. It is demoted to approval-gated at read time.
  */
-export function blueprintToContract(row: BlueprintRow): AgentContract {
+export function blueprintToContract(row: BlueprintRow & { created_at?: string | null }): AgentContract {
   const prohibited = HARD_PROHIBITED as readonly string[];
   const alwaysApproval = ALWAYS_NEEDS_APPROVAL as readonly string[];
 
@@ -87,6 +87,7 @@ export function blueprintToContract(row: BlueprintRow): AgentContract {
     escalationConditions: row.escalation_conditions,
     successMetric: row.success_metric,
     expiresInMinutes: row.expires_in_minutes,
+    createdAt: row.created_at ?? null,
   };
 }
 

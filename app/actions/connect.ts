@@ -42,7 +42,10 @@ export async function startConnect(capability: string) {
     client_id: clientId,
     redirect_uri: `${await siteOrigin()}/auth/google/connect/callback`,
     response_type: "code",
-    scope: CAPABILITIES[capability].scopes.join(" "),
+    // openid is required so the token exchange returns an id_token — the callback reads
+    // `sub` from it to identify which Google account this grant belongs to. Without it,
+    // every capability connection fails with `no_account_id`.
+    scope: ["openid", ...CAPABILITIES[capability].scopes].join(" "),
     // offline + consent are what make Google return a refresh token at all.
     access_type: "offline",
     prompt: "consent",

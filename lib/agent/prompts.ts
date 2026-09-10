@@ -39,7 +39,9 @@ export function buildExtractionPrompt(input: {
 }): string {
   return [
     `Conversation date: ${input.conversationDate}`,
-    `Client: ${input.clientName}`,
+    // The client's name comes from a record an org member typed in, not from this codebase
+    // — wrapped like the transcript, not interpolated as trusted text.
+    `Client:`, wrapAsData(input.clientName),
     `Resolve every relative date against the conversation date above.`,
     ``,
     `Transcript:`,
@@ -55,7 +57,7 @@ export function buildDraftPrompt(input: {
   meetingContext?: string | null;
 }): string {
   const lines = [
-    `Client: ${input.clientName}`,
+    `Client:`, wrapAsData(input.clientName),
     `Commitment: ${input.commitmentText}`,
     `Due: ${input.deadline ?? "no date stated"}`,
     ``,

@@ -78,6 +78,21 @@ describe("regenerateDraftFor", () => {
     expect(after.every((d) => d.body === "Regenerated body confirming the promise.")).toBe(true);
   });
 
+  it("clears a stale Gmail link so a rewrite isn't stuck showing the old draft", async () => {
+    await db.from("deliverable_draft").update({
+      provider: "gmail", provider_draft_id: "gmail-draft-stale",
+      provider_message_id: "gmail-message-stale",
+      pushed_at: new Date().toISOString(), pushed_by: null,
+    }).eq("commitment_id", withDraft);
+
+    await regenerateDraftFor(db, { commitmentId: withDraft }, model);
+
+    const after = await draftsFor(withDraft);
+    expect(after[0].provider_draft_id).toBeNull();
+    expect(after[0].provider_message_id).toBeNull();
+    expect(after[0].pushed_at).toBeNull();
+  });
+
   it("writes an agent-actor audit row", async () => {
     await regenerateDraftFor(db, { commitmentId: withoutDraft }, model);
     const { data } = await db.from("audit_event").select("*")

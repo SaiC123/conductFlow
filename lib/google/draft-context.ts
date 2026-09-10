@@ -16,11 +16,13 @@ const EMPTY: DraftContext = { templateText: null, meetingContext: null, sources:
  */
 export async function contextForOrg(
   service: SupabaseClient,
-  args: { orgId: string; clientName: string; occurredAt: string },
+  args: { orgId: string; clientName: string; occurredAt: string; allowedSources: readonly string[] },
 ): Promise<DraftContext> {
   const [driveToken, calendarToken] = await Promise.all([
-    tokenOrNull(service, args.orgId, CAPABILITIES.drive_templates.scopes[0]),
-    tokenOrNull(service, args.orgId, CAPABILITIES.calendar_context.scopes[0]),
+    args.allowedSources.includes("template")
+      ? tokenOrNull(service, args.orgId, CAPABILITIES.drive_templates.scopes[0]) : null,
+    args.allowedSources.includes("calendar_event")
+      ? tokenOrNull(service, args.orgId, CAPABILITIES.calendar_context.scopes[0]) : null,
   ]);
   if (!driveToken && !calendarToken) return EMPTY;
 
@@ -30,10 +32,9 @@ export async function contextForOrg(
   try {
     return await buildDraftContext({
       timeZone: (org?.timezone as string | undefined) ?? "UTC",
-      // A capability the org did not grant yields a client whose calls fail, and
-      // buildDraftContext already degrades each source to null on failure.
-      drive: createDriveClient(driveToken ?? ""),
-      calendar: createCalendarClient(calendarToken ?? ""),
+      // No client means no provider request, including for blueprint-disallowed sources.
+      drive: driveToken ? createDriveClient(driveToken) : null,
+      calendar: calendarToken ? createCalendarClient(calendarToken) : null,
       clientName: args.clientName,
       occurredAt: args.occurredAt,
     });

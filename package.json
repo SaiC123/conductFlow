@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:reset": "supabase db reset",
+    "db:push": "supabase db push",
     "eval": "vitest run --config vitest.eval.config.ts"
   },
   "dependencies": {

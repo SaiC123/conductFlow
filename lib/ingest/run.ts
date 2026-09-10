@@ -5,6 +5,7 @@ import { generateFollowUpDraft } from "@/lib/agent/draft";
 import { canExecute } from "@/lib/agent/execute-policy";
 import { contractFor } from "@/lib/agent/blueprint-store";
 import { logAudit } from "@/lib/audit/log";
+import { getServiceClient } from "@/lib/db/service";
 import { contextForOrg } from "@/lib/google/draft-context";
 import { detectEscalations } from "@/lib/agent/escalate";
 import { detectExceptions } from "@/lib/ops/exceptions";
@@ -31,7 +32,8 @@ export async function runIngest(
   // gets the shipped defaults. Kept, not discarded: finishIngest needs it again to decide
   // which escalation kinds this org asked to be shown.
   const contract = await contractFor(db, args.orgId);
-  const decision = canExecute("draft_task_list", false, contract);
+  const decision = canExecute("draft_task_list", false, contract,
+    { sources: ["transcript", "client_contact"] });
   if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
 
   const { data: conversation, error: convError } = await db.from("conversation")
@@ -61,7 +63,8 @@ export async function retryExtractionFor(
 
   // Checked after the lookup, because the org to check against comes from the transcript.
   const contract = await contractFor(db, t.org_id as string);
-  const decision = canExecute("draft_task_list", false, contract);
+  const decision = canExecute("draft_task_list", false, contract,
+    { sources: ["transcript", "client_contact"] });
   if (!decision.ok) throw new Error(`action denied: ${decision.reason}`);
 
   const { data: c } = await db.from("conversation")
@@ -108,6 +111,29 @@ async function finishIngest(
     throw e;
   }
 
+  // Everything from here through the return is wrapped: extraction succeeded, but a
+  // failure partway through commitment insertion, the transcript update, or escalation
+  // writes must still leave the transcript discoverable as failed — not stuck `pending`
+  // forever, invisible to `listFailedTranscripts` and with no Retry available.
+  try {
+    return await finishIngestAfterExtraction(db, ctx, extracted, model);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    const { error: markError } = await db.from("transcript").update({
+      extraction_status: "failed", extraction_error: message,
+    }).eq("id", ctx.transcriptId);
+    logFailure("finishIngest.markFailedAfterPartialWrite", markError);
+    throw e;
+  }
+}
+
+async function finishIngestAfterExtraction(
+  db: SupabaseClient,
+  ctx: { orgId: string; clientId: string; clientName: string; conversationId: string;
+    transcriptId: string; transcript: string; occurredAt: string; contract: AgentContract },
+  extracted: Awaited<ReturnType<typeof extractCommitments>>,
+  model?: LanguageModel,
+): Promise<IngestResult> {
   const flaggedSource = extracted.flagged.length > 0;
 
   // Inserted one at a time so each row pairs structurally with its source commitment —
@@ -200,26 +226,43 @@ async function finishIngest(
     });
   }
 
+  // Unattended ingest is not a human clicking approve — an org that set `draft_follow_up`
+  // to ask-first or off must not get auto-generated drafts just because extraction ran.
+  // Google context is optional: omit disallowed sources before fetching, so forbidding
+  // templates or calendar events still permits a plain draft from the conversation.
+  const contextSources = ["template", "calendar_event"]
+    .filter((source) => ctx.contract.allowedSources.includes(source));
+  const draftDecision = canExecute("draft_follow_up", false, ctx.contract,
+    { sources: ["transcript", "client_contact", ...contextSources] });
+
   // Fetched once for the whole transcript, not per commitment: the template and the day's
   // meetings are the same for every promise made in one conversation. Empty for an org
   // that has connected nothing, which is every org until someone visits Settings.
-  const context = await contextForOrg(db, {
-    orgId: ctx.orgId, clientName: ctx.clientName, occurredAt: ctx.occurredAt,
-  });
+  // `connected_data_source`'s token columns are service-role only — `contextForOrg` must
+  // not be handed the session-scoped `db`, or every org's Google context resolves empty
+  // regardless of connection state.
+  const context = draftDecision.ok && contextSources.length > 0
+    ? await contextForOrg(getServiceClient(), {
+      orgId: ctx.orgId, clientName: ctx.clientName, occurredAt: ctx.occurredAt,
+      allowedSources: contextSources,
+    })
+    : { templateText: null, meetingContext: null, sources: [] as string[] };
 
   // A draft failing is not an ingest failing — that commitment keeps the empty-draft state.
-  const drafts = await Promise.allSettled(pairs.map(async ({ id, commitment: c }) => {
-    const draft = await generateFollowUpDraft({
-      templateText: context.templateText, meetingContext: context.meetingContext,
-      commitmentText: c.text, clientName: ctx.clientName,
-      deadline: c.deadline, sourceSpan: c.source_span,
-    }, model);
-    const { error } = await db.from("deliverable_draft").insert({
-      org_id: ctx.orgId, commitment_id: id, kind: "email",
-      subject: draft.subject, body: draft.body,
-    });
-    if (error) throw error;
-  }));
+  const drafts = draftDecision.ok
+    ? await Promise.allSettled(pairs.map(async ({ id, commitment: c }) => {
+      const draft = await generateFollowUpDraft({
+        templateText: context.templateText, meetingContext: context.meetingContext,
+        commitmentText: c.text, clientName: ctx.clientName,
+        deadline: c.deadline, sourceSpan: c.source_span,
+      }, model);
+      const { error } = await db.from("deliverable_draft").insert({
+        org_id: ctx.orgId, commitment_id: id, kind: "email",
+        subject: draft.subject, body: draft.body,
+      });
+      if (error) throw error;
+    }))
+    : [];
   for (const d of drafts) {
     if (d.status === "rejected") logFailure("finishIngest.draft", d.reason);
   }

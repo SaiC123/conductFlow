@@ -18,6 +18,7 @@ import { DEFAULT_BLUEPRINT, blueprintToContract } from "@/lib/agent/blueprint";
 const req = {
   action: "draft_recap", orgId: "org-1", actorUserId: "user-1", actor: "agent" as const,
   subjectType: "commitment", subjectId: "c-1", approved: false,
+  sources: ["transcript", "client_contact"],
 };
 
 beforeEach(() => {
@@ -33,6 +34,25 @@ describe("executeAction resolves the org's own contract", () => {
     const run = vi.fn(async () => {});
     await executeAction(req, run);
     expect(run).toHaveBeenCalledOnce();
+  });
+
+  it("does not run the callback when a required source is disallowed", async () => {
+    vi.mocked(contractFor).mockResolvedValue(blueprintToContract({
+      ...DEFAULT_BLUEPRINT, allowed_sources: [],
+    }));
+    const run = vi.fn(async () => {});
+    await expect(executeAction(req, run)).rejects.toThrow("action denied: source_not_allowed");
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("checks expiry at execution using the injected clock", async () => {
+    vi.mocked(contractFor).mockResolvedValue(blueprintToContract({
+      ...DEFAULT_BLUEPRINT, created_at: "2026-09-09T12:00:00Z",
+    }));
+    const run = vi.fn(async () => {});
+    await expect(executeAction({ ...req, now: new Date("2026-09-09T13:00:00Z") }, run))
+      .rejects.toThrow("action denied: needs_approval");
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("denies rather than widening when the blueprint cannot be read", async () => {

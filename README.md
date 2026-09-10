@@ -44,19 +44,28 @@ the org's own contract; and a contract that cannot be read denies the action ins
 **Nothing sends, and that is enforced in code, not by scope.** No Google scope permits
 creating a draft without also permitting send: `gmail.compose` authorizes `drafts.send`. So
 `send_external_email` sits in the contract's `prohibitedActions` — denied even with
-approval — `lib/gmail/client.ts` exposes exactly two endpoints, and a test fails the build
-if the word `send` appears in that module. Verify with
+approval — `lib/gmail/client.ts` exposes exactly two endpoints, and a test
+(`tests/gmail/push.test.ts`, "the no-send guarantee") fails if the word `send` appears
+anywhere in that module. `npm run build` itself only runs `next build` and does not run
+Vitest — the guard is enforced by `npm test`, not by the production build. Verify with
 `rg -i "messages/send|drafts/send" lib/`.
 
 ## Prerequisites
 
-- Node.js 20+
-- [Docker](https://www.docker.com/) running locally — the Supabase CLI shells out to
-  it for Postgres, Auth, and the rest of the local stack. Confirm `docker info`
-  succeeds before continuing.
+- Node.js 22+ — the `ai` and `@supabase/supabase-js` versions locked in `package-lock.json`
+  declare `engines.node: >=22`; Node 20 will pull the same packages but is not what they
+  were tested against.
 - [Supabase CLI](https://supabase.com/docs/guides/cli) (installed as a dev dependency)
+- Postgres + Auth to run against — pick one:
+  - **Option A — Docker.** The Supabase CLI shells out to Docker to run the local
+    stack (Postgres, Auth, Storage, Studio). Confirm `docker info` succeeds first.
+  - **Option B — hosted Supabase project, no Docker.** A free project at
+    [supabase.com](https://supabase.com) supplies Postgres and Auth over the network;
+    nothing runs on your machine except the Next.js dev server. See below.
 
 ## Local
+
+### Option A — Docker (local Supabase stack)
 
 1. `cp .env.local.example .env.local` and fill in the values printed by `supabase start`
    (`API_URL` → `NEXT_PUBLIC_SUPABASE_URL`, `ANON_KEY`, `SERVICE_ROLE_KEY`).
@@ -64,7 +73,7 @@ if the word `send` appears in that module. Verify with
    `openai/gpt-oss-120b` through the Vercel AI Gateway. `vercel env pull` also
    works: the `VERCEL_OIDC_TOKEN` it writes authenticates the gateway on its own, but
    it expires every 12 hours. `npm test` does not need either; tests inject a mock model.
-3. `npx supabase start` then `npm run db:reset` (applies migrations `0001`–`0003` + seed).
+3. `npx supabase start` then `npm run db:reset` (applies migrations `0001`–`0011` + seed).
 4. `npm run dev` → http://localhost:3000
 5. Open `/onboarding`. Google OAuth sign-in shipped in Phase 3A and works once the
    credentials in **Google setup** below are in place. **Continue as demo owner** is the
@@ -72,19 +81,68 @@ if the word `send` appears in that module. Verify with
    through the admin API. There is no password field, and it renders only when
    `NODE_ENV` is not `production` *and* the Supabase URL is loopback.
 
+### Option B — hosted Supabase project (no Docker)
+
+Postgres, Auth, and Storage run on Supabase's infrastructure instead of in local
+containers, so nothing here shells out to Docker.
+
+1. Create a free project at [supabase.com](https://supabase.com/dashboard) and note its
+   project ref (the `xxxxxxxx` in `https://xxxxxxxx.supabase.co`).
+2. `npx supabase link --project-ref <ref>` — prompts for the database password you set
+   when creating the project. This does not start any local service.
+3. `npm run db:push` — applies `supabase/migrations/0001`–`0011` directly to the hosted
+   database over its Postgres connection. No shadow database, no containers.
+4. Seed the demo data: grab the connection string from the dashboard
+   (**Project Settings → Database → Connection string**, "URI" tab) and run
+   `psql "<connection-string>" -f supabase/seed.sql`.
+5. `cp .env.local.example .env.local` and fill it from **Project Settings → API**:
+   `NEXT_PUBLIC_SUPABASE_URL` (Project URL), `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`. Add `AI_GATEWAY_API_KEY` as in Option A step 2 if you
+   need extraction; `npm test` doesn't.
+6. `npm run dev` → http://localhost:3000.
+7. **The demo sign-in button will not work here, by design** — `app/actions/dev-auth.ts`
+   refuses to mint a session unless `NEXT_PUBLIC_SUPABASE_URL` is loopback, specifically so
+   a typo can't mint free admin sessions against a real project. Use Google OAuth sign-in
+   instead (**Google setup** below), pointing the Google Cloud Console redirect URI at
+   `https://<ref>.supabase.co/auth/v1/callback` and enabling the Google provider under
+   **Authentication → Providers** in the dashboard — `supabase/config.toml`'s
+   `[auth.external.google]` block only applies to `supabase start`, not a linked project.
+   Separately, add `http://localhost:3000/auth/callback` (or your deployed origin's
+   `/auth/callback`) to **Authentication → URL Configuration → Redirect URLs** in the same
+   dashboard — `app/auth/signin/route.ts` sends Supabase Auth's `signInWithOAuth` back to
+   that app-side URL after Google redirects to Supabase, and it's a separate allowlist from
+   the Google Cloud Console one; missing it fails the sign-in with a redirect error after
+   Google's own consent screen succeeds.
+8. To run the stack-backed tests (see **Test** below) against this project instead of a
+   local one, export before `npm test`:
+   ```
+   export SUPABASE_URL=https://<ref>.supabase.co
+   export NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+   export SUPABASE_ANON_KEY=<anon key from Project Settings → API>
+   export SUPABASE_SERVICE_ROLE_KEY=<service role key, same place>
+   export SUPABASE_JWT_SECRET=<Project Settings → API → JWT Settings → Legacy JWT secret>
+   ```
+   Without these, `vitest.config.ts` defaults to `http://127.0.0.1:54321` and the
+   stack-backed tests fail to connect.
+
+`db:reset` (`supabase db reset`) is Docker-only — it rebuilds the *local* stack from
+scratch and doesn't apply to a linked hosted project. On Option B, re-running
+`npm run db:push` picks up new migrations; there's no destructive one-command reset for a
+hosted database, which is the point.
+
 ### Screens
 
 | Route | What it shows |
 | --- | --- |
 | `/` | Marketing hero |
-| `/onboarding` | Sign-in (Google stub + dev demo session) |
+| `/onboarding` | Sign-in: Google OAuth, email sign-in (`/auth/email`), and the dev-only demo session |
 | `/ingest` | Paste or upload a transcript; extraction produces reviewable commitments |
 | `/queue` | Commitment queue — confidence chip + status dot per promise, needs-attention strip |
 | `/queue/[commitmentId]` | Draft review: draft surface, provenance, flagged-source banner, write/rewrite draft, approval bar |
 | `/tasks` | Task board: open / in progress / delivered, plus the overdue reminder strip |
 | `/dashboard` | Promise risk: overdue, owner+deadline coverage, approved share |
 | `/operations` | Operations map: lead times, promise types, owners, delivery, client load, weekly volume — needs 20 commitments |
-| `/settings` | Google connections — connect or revoke one capability at a time |
+| `/settings` | Google connections — grant one capability at a time; disconnecting revokes the whole connected account, not a single capability |
 | `/settings/blueprint` | The agent blueprint: per-action unattended / ask-first / off. Owner-only, append-only versions |
 
 Approving writes an `approval_event`, a `task`, and an `audit_event`, and flips the
@@ -134,11 +192,15 @@ Rules that hold across every screen:
 
 ## Test
 
-`npm test` — 361 tests across 37 files, no API key, no network, and no Google credentials
-required. Google clients are injected, so Drive, Calendar, and Gmail are tested against fakes.
-`tests/rls.test.ts`, `tests/ingest/*`, `tests/drafts/*`, `tests/reminders/sweep.test.ts`,
-`tests/tasks/update.test.ts`, and `tests/agent/blueprint-store.test.ts` talk to the running local
-stack, so `supabase start` and `npm run db:reset` must have succeeded first. The suite covers
+`npm test` — no API key and no Google credentials required anywhere in the suite. Google
+clients are injected, so Drive, Calendar, and Gmail are tested against fakes. Most of the
+suite needs no live service at all, but `tests/rls.test.ts`, `tests/ingest/*`,
+`tests/drafts/*`, `tests/reminders/sweep.test.ts`, `tests/tasks/update.test.ts`,
+`tests/agent/blueprint-store.test.ts`, `tests/auth/bootstrap.test.ts`, and
+`tests/google/tokens.test.ts` talk to the running local (or linked hosted, see **Option B**
+above) Supabase stack over the network, so `supabase start` and `npm run db:reset` — or a
+`db:push` against a hosted project — must have succeeded first; without either, those files
+fail with `fetch failed` rather than a useful assertion. The suite covers
 cross-org denial, anonymous denial, audit append-only enforcement, the deny-by-default
 chokepoint, injection flagging, schema validation, span verification, deadline resolution, the
 extraction retry, transcript parsing, the ingest write sequence, task transitions, the idempotent
@@ -190,15 +252,31 @@ sign-in button, and an org that has connected nothing simply gets plainer drafts
 3. Generate `DATA_SOURCE_KEK`:
    `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
    Without it, connecting a data source fails and everything else keeps working.
-4. Restricted Gmail scopes need Google verification plus a CASA assessment before more
+4. In the same Google Cloud project as the OAuth client, enable Google Drive API and
+   Google Picker API. Go to **APIs & Services > Credentials > Create Credentials > API key**
+   and set `NEXT_PUBLIC_GOOGLE_PICKER_API_KEY` in `.env.local` to that key. Restrict the key
+   to **Google Picker API** and **Websites**: your site's origins (for example,
+   `http://localhost:3000/*` and `https://your-site.example/*`) plus `https://docs.google.com/*`
+   for the Picker iframe. This browser key is public; it is separate from the OAuth secret.
+   Set `NEXT_PUBLIC_GOOGLE_PICKER_APP_ID` to the project's numeric **Project number** from
+   the Cloud Console dashboard. Picker requires it to grant access under `drive.file`.
+   Restart local dev or rebuild your deployment after setting these public variables.
+   See [Google's Picker setup guide](https://developers.google.com/workspace/drive/picker/guides/web-picker).
+5. Connect **Use our Drive templates** in Settings, then click **Choose template files**.
+   Select one or more Google Docs or text files with `template` in the name. Picker grants
+   access to those files; the existing template matching uses them on the next draft.
+   Without `NEXT_PUBLIC_GOOGLE_PICKER_API_KEY` (or the project number), the button shows an
+   inline setup error instead of crashing.
+6. Restricted Gmail scopes need Google verification plus a CASA assessment before more
    than 100 users can consent. Fine for a pilot; plan for it before launch.
 
 ## Troubleshooting
 
-- **`exec format error` from a Supabase container.** A cached image layer is corrupt.
-  `docker image rm -f <image>` and re-run `supabase start`; the CLI names the offending
-  image in its error. Studio and postgres-meta are dashboard-only — if they stay broken,
-  `npx supabase start -x studio,postgres-meta` runs everything the app and tests need.
+- **`exec format error` from a Supabase container (Option A only).** A cached image layer
+  is corrupt. `docker image rm -f <image>` and re-run `supabase start`; the CLI names the
+  offending image in its error. Studio and postgres-meta are dashboard-only — if they stay
+  broken, `npx supabase start -x studio,postgres-meta` runs everything the app and tests
+  need. Doesn't apply to Option B — there's no local container to go stale.
 - **`permission denied for table …` (SQLSTATE 42501).** The role lacks a `GRANT`, which
   is checked before RLS. Grants live at the end of `supabase/migrations/0001_schema_rls.sql`.
 - **Actions fail with "commitment not found" after `db:reset`.** The reset recreated

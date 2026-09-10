@@ -12,8 +12,8 @@ export interface DraftContext {
 }
 
 export interface DraftContextInput {
-  drive: DriveClient;
-  calendar: CalendarClient;
+  drive: DriveClient | null;
+  calendar: CalendarClient | null;
   clientName: string;
   /** Conversation date, YYYY-MM-DD. */
   occurredAt: string;
@@ -28,9 +28,9 @@ export interface DraftContextInput {
  */
 export async function buildDraftContext(input: DraftContextInput): Promise<DraftContext> {
   const sources: string[] = [];
-  const templateText = await loadTemplate(input.drive, input.clientName, sources);
-  const meetingContext = await loadMeetingContext(
-    input.calendar, input.occurredAt, input.timeZone ?? "UTC", sources);
+  const templateText = input.drive ? await loadTemplate(input.drive, input.clientName, sources) : null;
+  const meetingContext = input.calendar ? await loadMeetingContext(
+    input.calendar, input.occurredAt, input.timeZone ?? "UTC", sources) : null;
   return { templateText, meetingContext, sources };
 }
 

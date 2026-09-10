@@ -24,7 +24,12 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** Whitespace- and case-insensitive containment, so formatting noise doesn't fail a real quote. */
 function spanAppearsIn(transcript: string, span: string): boolean {
   const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
-  return norm(transcript).includes(norm(span));
+  const normalizedSpan = norm(span);
+  // A span that is nothing but whitespace normalizes to "", and every string "contains" "" —
+  // so without this check a fabricated commitment with a blank source_span would pass
+  // verification against any transcript and keep its original (non-low) confidence.
+  if (normalizedSpan.length === 0) return false;
+  return norm(transcript).includes(normalizedSpan);
 }
 
 function resolveDeadline(value: string | null): string | null {

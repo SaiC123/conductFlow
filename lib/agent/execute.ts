@@ -24,7 +24,7 @@ export class ContractUnavailable extends Error {
  */
 export async function executeAction(req: ActionRequest, run: () => Promise<void>) {
   const effective = await resolveContract(req);
-  const decision = canExecute(req.action, req.approved, effective);
+  const decision = canExecute(req.action, req.approved, effective, req);
   if (!decision.ok) { throw new Error(`action denied: ${decision.reason}`); }
   await run();
   await logAudit({ orgId: req.orgId, actor: req.actor, action: "update",
