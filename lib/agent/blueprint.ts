@@ -25,6 +25,10 @@ export const EDITABLE_ACTIONS = [
   "edit_crm",
   "draft_retainer_renewal",
   "draft_document_reminder",
+  "draft_reschedule_offer",
+  "draft_change_order",
+  "draft_invoice",
+  "draft_collections_reminder",
 ] as const;
 
 /**
@@ -46,9 +50,10 @@ export interface BlueprintRow {
 
 /** What a new org starts with: draft freely, ask before anything else. */
 export const DEFAULT_BLUEPRINT: BlueprintRow = {
-  allowed_sources: ["transcript", "client_contact", "template"],
+  allowed_sources: ["transcript", "client_contact", "template", "scope_of_work"],
   permitted_actions: ["draft_recap", "draft_task_list", "draft_follow_up",
-    "draft_retainer_renewal", "draft_document_reminder"],
+    "draft_retainer_renewal", "draft_document_reminder", "draft_reschedule_offer", "draft_change_order",
+    "draft_invoice", "draft_collections_reminder"],
   required_approvals: ["push_email_draft", "edit_crm", "create_internal_task",
     "propose_recurring_task"],
   escalation_conditions: ["complaint", "legal_concern", "missing_owner_or_deadline"],
