@@ -16,6 +16,11 @@ const DESTINATIONS: { href: string; label: string }[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/operations", label: "Operations" },
   { href: "/settings", label: "Settings" },
+  { href: "/retainers", label: "Retainers" },
+  { href: "/documents", label: "Documents" },
+  { href: "/scheduling", label: "Scheduling" },
+  { href: "/billing", label: "Billing" },
+  { href: "/scope", label: "Scope of work" },
 ];
 
 /**
@@ -30,7 +35,7 @@ export function navItems(pathname: string): NavItem[] {
 }
 
 /**
- * Ingest is a primary action, not a destination, so it sits apart from the four links and
+ * Ingest is a primary action, not a destination, so it sits apart from the links and
  * is styled as a button. Leaving it out entirely was the other option, but then an owner
  * standing on /tasks or /dashboard has no way to add a conversation without going back to
  * the queue first — and adding a conversation is the one thing the product exists to start.
@@ -38,6 +43,8 @@ export function navItems(pathname: string): NavItem[] {
 export function AppNav({ email }: { email: string | null }) {
   const pathname = usePathname() ?? "";
   const items = navItems(pathname);
+  const moreItems = items.slice(5);
+  const currentMore = moreItems.find((item) => item.isCurrent);
 
   return (
     // Sticky, and sharing the page frame's width and gutter, so the wordmark sits directly
@@ -45,16 +52,16 @@ export function AppNav({ email }: { email: string | null }) {
     <nav aria-label="Main" className="cf-nav">
       <div style={{ maxWidth: "var(--shell)", margin: "0 auto", padding: "0 var(--gutter)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: "var(--space-4)", minHeight: 48 }}>
+        gap: "var(--space-4)", minHeight: 48, flexWrap: "wrap" }}>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-5)", minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-5)", minWidth: 0, flexWrap: "wrap" }}>
           <Link href="/queue" style={{ color: "var(--text)", fontWeight: 600,
             fontSize: "var(--text-base)", letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
             ConductFlow
           </Link>
 
-          <ul style={{ display: "flex", listStyle: "none", padding: 0, margin: 0, gap: 1 }}>
-            {items.map((item) => (
+          <ul style={{ display: "flex", listStyle: "none", padding: 0, margin: 0, gap: 1, flexWrap: "wrap" }}>
+            {items.slice(0, 5).map((item) => (
               <li key={item.href}>
                 {/*
                   The skin lives in globals.css keyed off aria-current, so the pill an eye
@@ -67,6 +74,37 @@ export function AppNav({ email }: { email: string | null }) {
                 </Link>
               </li>
             ))}
+            <li style={{ position: "relative" }}>
+              <details key={pathname} onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.currentTarget.open = false;
+                  event.currentTarget.querySelector("summary")?.focus();
+                }
+              }}>
+                <summary className="cf-nav-link" style={{ cursor: "pointer",
+                  background: currentMore ? "var(--raised)" : undefined,
+                  color: currentMore ? "var(--text)" : undefined,
+                  fontWeight: currentMore ? 600 : undefined }}>
+                  {currentMore ? `More · ${currentMore.label}` : "More"}
+                </summary>
+                <ul style={{ position: "absolute", right: 0, minWidth: "max-content",
+                  listStyle: "none", margin: "var(--space-2) 0 0", padding: "var(--space-2)",
+                  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)" }}>
+                  {moreItems.map((item) => (
+                    <li key={item.href}>
+                      <Link href={item.href} className="cf-nav-link"
+                        aria-current={item.isCurrent ? "page" : undefined}
+                        onClick={(event) => {
+                          const disclosure = event.currentTarget.closest("details");
+                          if (disclosure) disclosure.open = false;
+                        }}>
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </li>
           </ul>
         </div>
 
