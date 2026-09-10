@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logAudit } from "@/lib/audit/log";
+import { logFailure } from "@/lib/observability/log";
+import { requestReviewIfDue } from "@/lib/reviews/requester";
 
 export const INVOICE_STATES = ["draft", "sent", "paid", "overdue", "void"] as const;
 export type InvoiceStatus = (typeof INVOICE_STATES)[number];
@@ -28,7 +30,7 @@ export async function setInvoiceStatusFor(
   args: { invoiceId: string; next: "sent" | "paid"; userId: string | null; now?: Date },
 ): Promise<{ status: InvoiceStatus }> {
   const { data: invoice, error } = await db.from("invoice")
-    .select("id,org_id,status").eq("id", args.invoiceId).maybeSingle();
+    .select("id,org_id,client_id,status").eq("id", args.invoiceId).maybeSingle();
   if (error) throw error;
   if (!invoice) throw new Error("invoice not found");
   const decision = canTransition(invoice.status as InvoiceStatus, args.next);
@@ -46,5 +48,18 @@ export async function setInvoiceStatusFor(
     orgId: invoice.org_id as string, actor: args.userId ? "human" : "agent", action: "update",
     target: `invoice:${invoice.id}:${args.next}`,
   });
+
+  if (args.next === "paid") {
+    // Best-effort: a review-request failure must never cost the payment record itself.
+    try {
+      await requestReviewIfDue(db, {
+        orgId: invoice.org_id as string, clientId: invoice.client_id as string,
+        trigger: "invoice_paid", now: args.now,
+      });
+    } catch (e) {
+      logFailure("setInvoiceStatusFor.requestReview", e);
+    }
+  }
+
   return { status: args.next };
 }

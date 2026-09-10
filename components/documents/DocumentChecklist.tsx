@@ -1,0 +1,120 @@
+"use client";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  addDocumentRequirement, markDocumentReceived, runDocumentSweep, pushDocumentDraft,
+} from "@/app/actions/documents";
+import {
+  Card, CardTitle, Badge, EmptyState, buttonStyle, fieldStyle, labelStyle, proseStyle,
+} from "@/components/ui/primitives";
+
+export interface DocumentChecklistProps {
+  clients: { id: string; name: string }[];
+  requirements: { id: string; name: string; description: string | null }[];
+  documents: { id: string; client_id: string; requirement_id: string; status: string }[];
+  drafts: { id: string; client_id: string; subject: string | null; body: string }[];
+}
+
+export function DocumentChecklist({ clients, requirements, documents, drafts }: DocumentChecklistProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  function run(key: string, fn: () => Promise<unknown>) {
+    setError(null); setNote(null); setBusyKey(key);
+    startTransition(async () => {
+      try { await fn(); router.refresh(); }
+      catch (e) { setError(e instanceof Error ? e.message : "That did not work."); }
+      finally { setBusyKey(null); }
+    });
+  }
+
+  return (
+    <div style={{ display: "grid", gap: "var(--space-4)" }}>
+      {error && <p role="alert" style={{ color: "var(--danger-text)" }}>{error}</p>}
+      {note && <p role="status" style={{ color: "var(--muted)" }}>{note}</p>}
+      <Card>
+        <CardTitle>Add a document requirement</CardTitle>
+        <p style={{ color: "var(--muted)", marginTop: "var(--space-2)" }}>Applies to every existing client.</p>
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          const data = new FormData(form);
+          run("add", async () => {
+            await addDocumentRequirement(data); form.reset(); setNote("Requirement added.");
+          });
+        }}>
+          <label style={labelStyle}>Document name
+            <input name="name" required disabled={isPending} style={fieldStyle} />
+          </label>
+          <label style={labelStyle}>Description (optional)
+            <textarea name="description" rows={3} disabled={isPending} style={fieldStyle} />
+          </label>
+          <button disabled={isPending} aria-busy={isPending && busyKey === "add"}
+            style={{ ...buttonStyle("primary", isPending), marginTop: "var(--space-4)" }}>
+            {isPending && busyKey === "add" ? "Adding…" : "Add requirement"}
+          </button>
+        </form>
+      </Card>
+      <div>
+        <button disabled={isPending} aria-busy={isPending && busyKey === "sweep"}
+          onClick={() => run("sweep", async () => {
+            const result = await runDocumentSweep();
+            setNote(`${result.drafted} reminder drafts created · ${result.skipped} skipped.`);
+          })} style={buttonStyle("secondary", isPending)}>
+          {isPending && busyKey === "sweep" ? "Chasing…" : "Chase now"}
+        </button>
+      </div>
+      {requirements.length === 0 && <EmptyState title="No requirements yet" body="Add a document above to start a checklist for your clients." />}
+      {requirements.map((requirement) => (
+        <Card key={requirement.id}>
+          <CardTitle>{requirement.name}</CardTitle>
+          {requirement.description && <p style={{ ...proseStyle, color: "var(--muted)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", marginTop: "var(--space-2)" }}>{requirement.description}</p>}
+          {clients.length === 0 && <p style={{ color: "var(--faint)", marginTop: "var(--space-3)" }}>No clients yet.</p>}
+          <ul style={{ listStyle: "none", padding: 0, margin: "var(--space-3) 0 0" }}>
+            {clients.map((client) => {
+              const document = documents.find((row) => row.client_id === client.id && row.requirement_id === requirement.id);
+              return (
+                <li key={client.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "var(--space-3)", padding: "var(--space-3) 0", borderTop: "1px solid var(--border)" }}>
+                  <span>{client.name}</span>
+                  <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", flexWrap: "wrap" }}>
+                    <Badge tone={document?.status === "received" ? "ok" : document?.status === "missing" ? "warn" : "neutral"}>
+                      {document?.status ?? "not assigned"}
+                    </Badge>
+                    {document?.status === "missing" && (
+                      <button disabled={isPending} aria-busy={isPending && busyKey === document.id}
+                        onClick={() => run(document.id, async () => {
+                          await markDocumentReceived(document.id); setNote("Document marked received.");
+                        })} style={buttonStyle("secondary", isPending)}>
+                        {isPending && busyKey === document.id ? "Saving…" : "Mark received"}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      ))}
+      {drafts.map((draft) => (
+        <Card key={draft.id}>
+          <CardTitle>{draft.subject ?? "Document reminder"}</CardTitle>
+          <p style={{ color: "var(--muted)", marginTop: "var(--space-2)" }}>
+            {clients.find((client) => client.id === draft.client_id)?.name ?? "Unknown client"} · Pending draft
+          </p>
+          <p style={{ ...proseStyle, whiteSpace: "pre-wrap", overflowWrap: "anywhere", marginTop: "var(--space-3)" }}>{draft.body}</p>
+          <button disabled={isPending} aria-busy={isPending && busyKey === draft.id}
+            onClick={() => run(draft.id, async () => {
+              const result = await pushDocumentDraft(draft.id);
+              if (!result.pushed) throw new Error(result.reason);
+              setNote("Draft pushed to Gmail.");
+            })} style={{ ...buttonStyle("secondary", isPending), marginTop: "var(--space-4)" }}>
+            {isPending && busyKey === draft.id ? "Pushing…" : "Push to Gmail"}
+          </button>
+        </Card>
+      ))}
+    </div>
+  );
+}

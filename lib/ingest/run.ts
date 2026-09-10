@@ -7,6 +7,7 @@ import { contractFor } from "@/lib/agent/blueprint-store";
 import { logAudit } from "@/lib/audit/log";
 import { getServiceClient } from "@/lib/db/service";
 import { contextForOrg } from "@/lib/google/draft-context";
+import { gateCommitmentScope } from "@/lib/agent/scope-check";
 import { detectEscalations } from "@/lib/agent/escalate";
 import { detectExceptions } from "@/lib/ops/exceptions";
 import { buildOperationsMap } from "@/lib/ops/map";
@@ -226,6 +227,22 @@ async function finishIngestAfterExtraction(
     });
   }
 
+  // Scope gate: fails open by construction — an org that never wrote a scope_of_work for
+  // this client gets `skipped` on the very first query, so this is a no-op for every org
+  // that hasn't opted in. A commitment the model flags as out-of-scope gets a change-order
+  // draft instead of a normal follow-up (excluded from the drafts loop below), so the extra
+  // ask isn't quietly treated as ordinary, already-agreed-to work.
+  const scopeChecks = await Promise.allSettled(pairs.map(async ({ id, commitment: c }) => {
+    const result = await gateCommitmentScope(db,
+      { id, org_id: ctx.orgId, client_id: ctx.clientId, text: c.text }, {}, model);
+    return { id, result };
+  }));
+  const outOfScopeIds = new Set<string>();
+  for (const check of scopeChecks) {
+    if (check.status === "rejected") { logFailure("finishIngest.scopeCheck", check.reason); continue; }
+    if (check.value.result.outcome === "change_order_drafted") outOfScopeIds.add(check.value.id);
+  }
+
   // Unattended ingest is not a human clicking approve — an org that set `draft_follow_up`
   // to ask-first or off must not get auto-generated drafts just because extraction ran.
   // Google context is optional: omit disallowed sources before fetching, so forbidding
@@ -250,7 +267,7 @@ async function finishIngestAfterExtraction(
 
   // A draft failing is not an ingest failing — that commitment keeps the empty-draft state.
   const drafts = draftDecision.ok
-    ? await Promise.allSettled(pairs.map(async ({ id, commitment: c }) => {
+    ? await Promise.allSettled(pairs.filter(({ id }) => !outOfScopeIds.has(id)).map(async ({ id, commitment: c }) => {
       const draft = await generateFollowUpDraft({
         templateText: context.templateText, meetingContext: context.meetingContext,
         commitmentText: c.text, clientName: ctx.clientName,

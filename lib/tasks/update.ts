@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { canTransition, isTaskStatus, type TaskStatus } from "./transitions";
 import { logAudit } from "@/lib/audit/log";
+import { logFailure } from "@/lib/observability/log";
+import { requestReviewIfDue } from "@/lib/reviews/requester";
 
 export interface SetTaskStatusArgs {
   taskId: string;
@@ -53,6 +55,22 @@ export async function setTaskStatusFor(
     const { error: reminderError } = await db.from("reminder")
       .update({ state: "resolved" }).eq("task_id", task.id).eq("state", "open");
     if (reminderError) throw reminderError;
+
+    // Best-effort, same posture as finishIngest's exception checks: a delivered task is
+    // the moment to ask for a review, but a failure here must never cost the delivery
+    // itself, which is the point of clicking this button.
+    try {
+      const { data: commitment } = await db.from("commitment")
+        .select("client_id,text").eq("id", task.commitment_id).maybeSingle();
+      if (commitment?.client_id) {
+        await requestReviewIfDue(db, {
+          orgId: task.org_id, clientId: commitment.client_id as string,
+          trigger: "task_delivered", context: commitment.text as string, now,
+        });
+      }
+    } catch (e) {
+      logFailure("setTaskStatusFor.requestReview", e);
+    }
   }
 
   await logAudit({
